@@ -12,3 +12,16 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# IDEA
+*.iml
+**/out/
+!src/**/out/
+
+# Based on https://jasonstitt.com/gitignore-whitelisting-patterns
+.idea/
+
+
+# Added by cargo
+
+/target
