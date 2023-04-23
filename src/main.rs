@@ -5,14 +5,15 @@ fn main() {
 
 #[derive(PartialEq, Debug)]
 struct Book {
+    symbol: String,
     title: String,
-    edition: i32,
-    isbn: String,
-    series: String,
-    pagetotal: i64,
-    publisher: String,
     authors: Vec<Author>,
-    date: Date,
+    date: Option<Date>,
+    edition: Option<i32>,
+    isbn: Option<String>,
+    series: Option<String>,
+    page_count: Option<i64>,
+    publisher: Option<String>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -31,12 +32,8 @@ enum Date {
 
 fn parse_bibtex(_entry: String) -> Book {
     Book {
+        symbol: String::from("beck-2004"),
         title: String::from("Extreme Programming Explained: Embrace Change"),
-        edition: 2,
-        isbn: String::from("978-0-13-405199-4"),
-        series: String::from("XP Series"),
-        pagetotal: 0,
-        publisher: String::from("Addison-Wesley Professional"),
         authors: vec![
             Author {
                 first_name: String::from("Kent"),
@@ -49,7 +46,12 @@ fn parse_bibtex(_entry: String) -> Book {
                 last_name: String::from("Andres"),
             },
         ],
-        date: Date::Year(2004),
+        edition: Some(2),
+        isbn: Some(String::from("978-0-13-405199-4")),
+        series: Some(String::from("XP Series")),
+        page_count: Some(0),
+        publisher: Some(String::from("Addison-Wesley Professional")),
+        date: Some(Date::Year(2004)),
     }
 }
 
@@ -71,12 +73,8 @@ fn parse_bibtex_entry() {
     );
 
     let expected = Book {
+        symbol: String::from("beck-2004"),
         title: String::from("Extreme Programming Explained: Embrace Change"),
-        edition: 2,
-        isbn: String::from("978-0-13-405199-4"),
-        series: String::from("XP Series"),
-        pagetotal: 0,
-        publisher: String::from("Addison-Wesley Professional"),
         authors: vec![
             Author {
                 first_name: String::from("Kent"),
@@ -89,7 +87,12 @@ fn parse_bibtex_entry() {
                 last_name: String::from("Andres"),
             },
         ],
-        date: Date::Year(2004),
+        edition: Some(2),
+        isbn: Some(String::from("978-0-13-405199-4")),
+        series: Some(String::from("XP Series")),
+        page_count: Some(0),
+        publisher: Some(String::from("Addison-Wesley Professional")),
+        date: Some(Date::Year(2004)),
     };
 
     // when
