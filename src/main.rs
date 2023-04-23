@@ -30,8 +30,8 @@ enum Date {
     YearMonthDay(i32, time::Month, i8),
 }
 
-fn parse_bibtex(_entry: String) -> Book {
-    Book {
+fn parse_bibtex(_entry: String) -> Result<Book, String> {
+    Ok(Book {
         symbol: String::from("beck-2004"),
         title: String::from("Extreme Programming Explained: Embrace Change"),
         authors: vec![
@@ -52,7 +52,7 @@ fn parse_bibtex(_entry: String) -> Book {
         page_count: Some(0),
         publisher: Some(String::from("Addison-Wesley Professional")),
         date: Some(Date::Year(2004)),
-    }
+    })
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn parse_bibtex_entry() {
         }"#,
     );
 
-    let expected = Book {
+    let expected = Ok(Book {
         symbol: String::from("beck-2004"),
         title: String::from("Extreme Programming Explained: Embrace Change"),
         authors: vec![
@@ -93,7 +93,7 @@ fn parse_bibtex_entry() {
         page_count: Some(0),
         publisher: Some(String::from("Addison-Wesley Professional")),
         date: Some(Date::Year(2004)),
-    };
+    });
 
     // when
     let parsed = parse_bibtex(entry);
