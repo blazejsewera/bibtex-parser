@@ -1,6 +1,9 @@
+mod strings;
+mod tokenizer;
+
 fn main() {
     println!("Hello, world!");
-    parse_bibtex(String::from("hello"));
+    parse_bibtex(s!("hello"));
 }
 
 #[derive(PartialEq, Debug)]
@@ -32,34 +35,37 @@ enum Date {
 
 fn parse_bibtex(_entry: String) -> Result<Book, String> {
     Ok(Book {
-        symbol: String::from("beck-2004"),
-        title: String::from("Extreme Programming Explained: Embrace Change"),
+        symbol: s!("beck-2004"),
+        title: s!("Extreme Programming Explained: Embrace Change"),
         authors: vec![
             Author {
-                first_name: String::from("Kent"),
+                first_name: s!("Kent"),
                 middle_name: None,
-                last_name: String::from("Beck"),
+                last_name: s!("Beck"),
             },
             Author {
-                first_name: String::from("Cynthia"),
+                first_name: s!("Cynthia"),
                 middle_name: None,
-                last_name: String::from("Andres"),
+                last_name: s!("Andres"),
             },
         ],
-        edition: Some(2),
-        isbn: Some(String::from("978-0-13-405199-4")),
-        series: Some(String::from("XP Series")),
-        page_count: Some(0),
-        publisher: Some(String::from("Addison-Wesley Professional")),
         date: Some(Date::Year(2004)),
+        edition: Some(2),
+        isbn: Some(s!("978-0-13-405199-4")),
+        series: Some(s!("XP Series")),
+        page_count: Some(0),
+        publisher: Some(s!("Addison-Wesley Professional")),
     })
 }
 
-#[test]
-fn parse_bibtex_entry() {
-    // given
-    let entry = String::from(
-        r#"
+#[cfg(test)]
+mod tokenizer_test {
+    use super::*;
+
+    #[test]
+    fn parse_bibtex_entry() {
+        // given
+        let entry = s!(r#"
         @book{beck-2004,
           title     = {Extreme Programming Explained: Embrace Change},
           edition   = {2},
@@ -69,35 +75,35 @@ fn parse_bibtex_entry() {
           publisher = {Addison-Wesley Professional},
           author    = {Beck, Kent and Andres, Cynthia},
           date      = {2004},
-        }"#,
-    );
+        }"#);
 
-    let expected = Ok(Book {
-        symbol: String::from("beck-2004"),
-        title: String::from("Extreme Programming Explained: Embrace Change"),
-        authors: vec![
-            Author {
-                first_name: String::from("Kent"),
-                middle_name: None,
-                last_name: String::from("Beck"),
-            },
-            Author {
-                first_name: String::from("Cynthia"),
-                middle_name: None,
-                last_name: String::from("Andres"),
-            },
-        ],
-        edition: Some(2),
-        isbn: Some(String::from("978-0-13-405199-4")),
-        series: Some(String::from("XP Series")),
-        page_count: Some(0),
-        publisher: Some(String::from("Addison-Wesley Professional")),
-        date: Some(Date::Year(2004)),
-    });
+        let expected = Ok(Book {
+            symbol: s!("beck-2004"),
+            title: s!("Extreme Programming Explained: Embrace Change"),
+            authors: vec![
+                Author {
+                    first_name: s!("Kent"),
+                    middle_name: None,
+                    last_name: s!("Beck"),
+                },
+                Author {
+                    first_name: s!("Cynthia"),
+                    middle_name: None,
+                    last_name: s!("Andres"),
+                },
+            ],
+            edition: Some(2),
+            isbn: Some(s!("978-0-13-405199-4")),
+            series: Some(s!("XP Series")),
+            page_count: Some(0),
+            publisher: Some(s!("Addison-Wesley Professional")),
+            date: Some(Date::Year(2004)),
+        });
 
-    // when
-    let parsed = parse_bibtex(entry);
+        // when
+        let parsed = parse_bibtex(entry);
 
-    // then
-    assert_eq!(expected, parsed)
+        // then
+        assert_eq!(expected, parsed)
+    }
 }
