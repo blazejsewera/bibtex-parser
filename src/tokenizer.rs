@@ -158,12 +158,13 @@ impl Tokenizer {
             if read == 0 {
                 return Ok(None);
             }
-            self.advance();
-
+            self.advance(current_byte);
             utf8_buffer[i] = current_byte;
 
-            let parsed = std::str::from_utf8(&utf8_buffer);
-            if parsed.is_err() {
+            let maybe_parsed = std::str::from_utf8(&utf8_buffer);
+            if let Ok(parsed) = maybe_parsed {
+                return Ok(parsed.chars().next());
+            } else {
                 continue;
             }
         }
@@ -177,9 +178,13 @@ impl Tokenizer {
         ))
     }
 
-    fn advance(&mut self) {
-        self.position.byte += 1;
-        self.position.column += 1;
+    fn advance(&mut self, c: u8) {
+        if c == b'\n' {
+            self.advance_newline()
+        } else {
+            self.position.byte += 1;
+            self.position.column += 1;
+        }
     }
 
     fn advance_newline(&mut self) {
@@ -247,6 +252,51 @@ struct EntryContext {
 #[cfg(test)]
 mod tokenizer_test {
     use super::*;
+
+    #[test]
+    fn utf8_next_char() {
+        vec![("abc", Some('a')), ("👌", Some('👌')), ("", None)]
+            .iter()
+            .for_each(|(input, expected)| {
+                // given
+                let reader = reader_from_str(input);
+                let mut tokenizer = Tokenizer::new(reader);
+
+                // when
+                let actual = tokenizer.next_char().unwrap();
+
+                // then
+                assert_eq!(actual, *expected);
+            });
+    }
+
+    #[test]
+    #[allow(clippy::invalid_utf8_in_unchecked)]
+    fn non_valid_utf8_next_char() {
+        unsafe {
+            // given
+            let utf8_buffer = &[255, 255, 255, 255];
+            let invalid_str = std::str::from_utf8_unchecked(utf8_buffer);
+            let reader = reader_from_str(invalid_str);
+            let mut tokenizer = Tokenizer::new(reader);
+
+            // when
+            let actual = tokenizer.next_char().unwrap_err().to_string();
+
+            // then
+            assert_eq!(
+                actual,
+                format!(
+                    "Cannot decode bytes to UTF-8. Bytes: {:02x} {:02x} {:02x} {:02x}",
+                    utf8_buffer[0], utf8_buffer[1], utf8_buffer[2], utf8_buffer[3]
+                ),
+            );
+        }
+    }
+
+    fn reader_from_str(s: &str) -> Box<dyn Read + '_> {
+        Box::new(s.as_bytes())
+    }
 
     #[test]
     fn tokenize_bibtex_entry() {
