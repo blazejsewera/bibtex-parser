@@ -1,6 +1,7 @@
-use crate::s;
-use std::ops::Add;
+use std::io::{Error, ErrorKind, Read};
 use EntryEnvironment::*;
+
+use crate::s;
 
 #[derive(Debug, PartialEq)]
 enum EntryType {
@@ -54,31 +55,38 @@ enum EntryToken {
     Value(String),
 }
 
-enum EntryLiteral {
+#[derive(Copy, Clone)]
+enum EntryLiteral<'a> {
     AtSign,
     LeftBrace,
     RightBrace,
     Comma,
     Equals,
     Whitespace,
-    Other(char),
+    Other(&'a str),
+    Newline,
+    DoubleQuote,
+    Hash,
 }
 
-impl EntryLiteral {
-    fn from_char(c: char) -> EntryLiteral {
+impl<'a> EntryLiteral<'a> {
+    fn from_str(c: &str) -> EntryLiteral {
         match c {
-            '@' => EntryLiteral::AtSign,
-            '{' => EntryLiteral::LeftBrace,
-            '}' => EntryLiteral::RightBrace,
-            ',' => EntryLiteral::Comma,
-            '=' => EntryLiteral::Equals,
-            ' ' | '\t' | '\r' | '\n' => EntryLiteral::Whitespace,
+            "@" => EntryLiteral::AtSign,
+            "{" => EntryLiteral::LeftBrace,
+            "}" => EntryLiteral::RightBrace,
+            "," => EntryLiteral::Comma,
+            "\"" => EntryLiteral::DoubleQuote,
+            "#" => EntryLiteral::Hash,
+            "=" => EntryLiteral::Equals,
+            " " | "\t" | "\r" => EntryLiteral::Whitespace,
+            "\n" => EntryLiteral::Newline,
             c => EntryLiteral::Other(c),
         }
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 enum EntryEnvironment {
     Idle,
     ReadType,
@@ -116,47 +124,124 @@ impl EntryEnvironment {
     }
 }
 
+struct Tokenizer {
+    buffer: Box<dyn Read>,
+    state: EntryEnvironment,
+    position: Position,
+}
+
+impl Tokenizer {
+    fn new(buffer: Box<dyn Read>) -> Tokenizer {
+        Tokenizer {
+            buffer,
+            state: Idle,
+            position: Position {
+                byte: 0,
+                line: 1,
+                column: 1,
+            },
+        }
+    }
+
+    fn idle(&mut self) {
+        let next = self
+            .next_char()
+            .unwrap_or_else(|_| panic!("Buffer parsing error. Position: {}.", self.position_str()));
+    }
+
+    fn next_char(&mut self) -> Result<Option<char>, Error> {
+        let mut utf8_buffer = [0u8; 4];
+
+        for i in 0..4 {
+            let mut current_byte = 0u8;
+            let read = self.buffer.read(std::slice::from_mut(&mut current_byte))?;
+            if read == 0 {
+                return Ok(None);
+            }
+            self.advance();
+
+            utf8_buffer[i] = current_byte;
+
+            let parsed = std::str::from_utf8(&utf8_buffer);
+            if parsed.is_err() {
+                continue;
+            }
+        }
+
+        Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!(
+                "Cannot decode bytes to UTF-8. Bytes: {:02x} {:02x} {:02x} {:02x}",
+                utf8_buffer[0], utf8_buffer[1], utf8_buffer[2], utf8_buffer[3]
+            ),
+        ))
+    }
+
+    fn advance(&mut self) {
+        self.position.byte += 1;
+        self.position.column += 1;
+    }
+
+    fn advance_newline(&mut self) {
+        self.position.byte += 1;
+        self.position.column = 1;
+        self.position.line += 1;
+    }
+
+    fn position_str(&self) -> String {
+        format!(
+            "byte: {} (line {}, column {})",
+            self.position.byte, self.position.line, self.position.column
+        )
+    }
+
+    fn new_state_from_literal(
+        &self,
+        literal: EntryLiteral,
+    ) -> Result<EntryEnvironment, &'static str> {
+        match (&self.state, literal) {
+            (Idle, EntryLiteral::AtSign) => Ok(ReadType),
+            (ReadType, EntryLiteral::LeftBrace) => Ok(ReadSymbol),
+            (ReadSymbol, EntryLiteral::Comma) => Ok(Idle),
+            (Idle, EntryLiteral::Other(_)) => Ok(ReadPropertyName),
+            (ReadPropertyName, EntryLiteral::Whitespace) => Ok(Idle),
+            (Idle, EntryLiteral::Equals) => Ok(ReadValue(0)),
+            (ReadValue(i), EntryLiteral::LeftBrace) => Ok(ReadValue(i + 1)),
+            (ReadValue(i), EntryLiteral::RightBrace) => match i {
+                i32::MIN..=-1 => {
+                    Err("Error when parsing bibtex. Possibly too many closing brackets?")
+                }
+                i => Ok(ReadValue(*i - 1)),
+            },
+            (ReadValue(i), EntryLiteral::Comma) => match i {
+                0 => Ok(Idle),
+                i => Ok(ReadValue(*i)),
+            },
+            (Idle, EntryLiteral::Whitespace) => Ok(Idle),
+            (Idle, EntryLiteral::RightBrace) => Ok(End),
+            (_, _) => Err("Error when parsing bibtex. Unexpected end of file."),
+        }
+    }
+}
+
+impl Iterator for Tokenizer {
+    type Item = EntryToken;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct Position {
+    byte: usize,
+    line: usize,
+    column: usize,
+}
+
 struct EntryContext {
     value: String,
     env: EntryEnvironment,
-}
-
-fn tokenize_bibtex(entry: String) -> Vec<EntryToken> {
-    let mut context: EntryContext = EntryContext {
-        value: String::from(""),
-        env: Idle,
-    };
-    let tokens = entry
-        .chars()
-        .map(EntryLiteral::from_char)
-        .scan(context, tokenize_from_literals)
-        .filter(Option::is_some);
-
-    vec![
-        EntryToken::Type(EntryType::Book),
-        EntryToken::Symbol(s!("beck-2004")),
-        EntryToken::Property(BookProperty::Title),
-        EntryToken::Value(s!("Extreme Programming Explained: Embrace Change")),
-    ]
-}
-
-fn tokenize_from_literals(
-    ctx: &mut EntryContext,
-    literal: EntryLiteral,
-) -> Option<Option<EntryToken>> {
-    let to_save = match ctx.env {
-        Idle | End | ErrorEnvironment(_) => None,
-        _ => match literal {
-            EntryLiteral::Other(c) => Some(c),
-            EntryLiteral::Whitespace => Some(' '),
-            _ => None,
-        },
-    };
-    ctx.env = ctx.env.transition(literal);
-    if let Some(c) = to_save {
-        ctx.value = format!("{}{}", ctx.value, c)
-    };
-    Some(None)
 }
 
 #[cfg(test)]
@@ -166,10 +251,13 @@ mod tokenizer_test {
     #[test]
     fn tokenize_bibtex_entry() {
         // given
-        let entry = s!(r#"
+        let entry = r#"
             @book{beck-2004,
               title     = {Extreme Programming Explained: Embrace Change},
-            }"#);
+            }"#
+        .as_bytes();
+
+        let tokenizer = Tokenizer::new(Box::new(entry));
 
         let expected = vec![
             EntryToken::Type(EntryType::Book),
@@ -179,7 +267,7 @@ mod tokenizer_test {
         ];
 
         // when
-        let actual = tokenize_bibtex(entry);
+        let actual: Vec<EntryToken> = tokenizer.collect();
 
         // then
         assert_eq!(expected, actual)
