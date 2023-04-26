@@ -136,7 +136,7 @@ impl Tokenizer {
             buffer,
             state: Idle,
             position: Position {
-                byte: 0,
+                byte: 1,
                 line: 1,
                 column: 1,
             },
@@ -158,12 +158,16 @@ impl Tokenizer {
             if read == 0 {
                 return Ok(None);
             }
-            self.advance(current_byte);
+            self.advance_byte();
             utf8_buffer[i] = current_byte;
 
             let maybe_parsed = std::str::from_utf8(&utf8_buffer);
             if let Ok(parsed) = maybe_parsed {
-                return Ok(parsed.chars().next());
+                let ch = parsed.chars().next();
+                if let Some(c) = ch {
+                    self.advance(c);
+                }
+                return Ok(ch);
             } else {
                 continue;
             }
@@ -172,23 +176,25 @@ impl Tokenizer {
         Err(Error::new(
             ErrorKind::InvalidInput,
             format!(
-                "Cannot decode bytes to UTF-8. Bytes: {:02x} {:02x} {:02x} {:02x}",
+                "Cannot decode bytes to UTF-8. Bytes: [{:02x} {:02x} {:02x} {:02x}]",
                 utf8_buffer[0], utf8_buffer[1], utf8_buffer[2], utf8_buffer[3]
             ),
         ))
     }
 
-    fn advance(&mut self, c: u8) {
-        if c == b'\n' {
+    fn advance_byte(&mut self) {
+        self.position.byte += 1;
+    }
+
+    fn advance(&mut self, c: char) {
+        if c == '\n' {
             self.advance_newline()
         } else {
-            self.position.byte += 1;
             self.position.column += 1;
         }
     }
 
     fn advance_newline(&mut self) {
-        self.position.byte += 1;
         self.position.column = 1;
         self.position.line += 1;
     }
@@ -254,6 +260,59 @@ mod tokenizer_test {
     use super::*;
 
     #[test]
+    fn position() {
+        vec![
+            (
+                "aaa",
+                Position {
+                    byte: 3,
+                    line: 1,
+                    column: 3,
+                },
+            ),
+            (
+                "a👌b",
+                Position {
+                    byte: 6,
+                    line: 1,
+                    column: 3,
+                },
+            ),
+            (
+                "a\nb",
+                Position {
+                    byte: 3,
+                    line: 2,
+                    column: 1,
+                },
+            ),
+            (
+                "👌\nb",
+                Position {
+                    byte: 6,
+                    line: 2,
+                    column: 1,
+                },
+            ),
+        ]
+        .iter()
+        .for_each(|(input, expected)| {
+            // given
+            let reader = reader_from_str(input);
+            let mut tokenizer = Tokenizer::new(reader);
+
+            // when
+            for _ in 1..3 {
+                let _ = tokenizer.next_char();
+            }
+            let actual = tokenizer.position;
+
+            // then
+            assert_eq!(actual, *expected);
+        });
+    }
+
+    #[test]
     fn utf8_next_char() {
         vec![("abc", Some('a')), ("👌", Some('👌')), ("", None)]
             .iter()
@@ -275,7 +334,7 @@ mod tokenizer_test {
     fn non_valid_utf8_next_char() {
         unsafe {
             // given
-            let utf8_buffer = &[255, 255, 255, 255];
+            let utf8_buffer = &[255, 254, 253, 252];
             let invalid_str = std::str::from_utf8_unchecked(utf8_buffer);
             let reader = reader_from_str(invalid_str);
             let mut tokenizer = Tokenizer::new(reader);
@@ -286,10 +345,7 @@ mod tokenizer_test {
             // then
             assert_eq!(
                 actual,
-                format!(
-                    "Cannot decode bytes to UTF-8. Bytes: {:02x} {:02x} {:02x} {:02x}",
-                    utf8_buffer[0], utf8_buffer[1], utf8_buffer[2], utf8_buffer[3]
-                ),
+                s!("Cannot decode bytes to UTF-8. Bytes: [ff fe fd fc]"),
             );
         }
     }
@@ -320,6 +376,6 @@ mod tokenizer_test {
         let actual: Vec<EntryToken> = tokenizer.collect();
 
         // then
-        assert_eq!(expected, actual)
+        assert_eq!(actual, expected)
     }
 }
