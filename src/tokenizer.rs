@@ -85,6 +85,22 @@ impl EntryLiteral {
             c => EntryLiteral::Other(c),
         }
     }
+
+    fn to_char(&self) -> char {
+        match &self {
+            EntryLiteral::AtSign => '@',
+            EntryLiteral::LeftBrace => '{',
+            EntryLiteral::RightBrace => '}',
+            EntryLiteral::Comma => ',',
+            EntryLiteral::DoubleQuote => '"',
+            EntryLiteral::Hash => '#',
+            EntryLiteral::Equals => '=',
+            EntryLiteral::Whitespace => ' ',
+            EntryLiteral::Newline => '\n',
+            EntryLiteral::Other(c) => *c,
+            EntryLiteral::EndOfFile => '%',
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -117,8 +133,26 @@ impl Tokenizer {
     }
 
     fn idle(&mut self) -> Result<(), Error> {
-        let next = self.next_char()?;
-        todo!()
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::AtSign => {
+                self.transition(ReadType);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                format!("Unexpected EOF. Position: {}", self.position_str()),
+            )),
+            l => Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "Unexpected token: '{}'. Position: {}",
+                    l.to_char(),
+                    self.position_str()
+                ),
+            )),
+        }
     }
 
     fn next_literal(&mut self) -> Result<EntryLiteral, Error> {
@@ -184,6 +218,10 @@ impl Tokenizer {
             "byte: {} (line {}, column {})",
             self.position.byte, self.position.line, self.position.column
         )
+    }
+
+    fn transition(&mut self, new_state: EntryEnvironment) {
+        self.state = new_state;
     }
 
     fn new_state_from_literal(
