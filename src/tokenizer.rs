@@ -55,32 +55,33 @@ enum EntryToken {
     Value(String),
 }
 
-#[derive(Copy, Clone)]
-enum EntryLiteral<'a> {
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum EntryLiteral {
     AtSign,
     LeftBrace,
     RightBrace,
     Comma,
     Equals,
     Whitespace,
-    Other(&'a str),
+    Other(char),
     Newline,
     DoubleQuote,
     Hash,
+    EndOfFile,
 }
 
-impl<'a> EntryLiteral<'a> {
-    fn from_str(c: &str) -> EntryLiteral {
+impl EntryLiteral {
+    fn from_char(c: char) -> EntryLiteral {
         match c {
-            "@" => EntryLiteral::AtSign,
-            "{" => EntryLiteral::LeftBrace,
-            "}" => EntryLiteral::RightBrace,
-            "," => EntryLiteral::Comma,
-            "\"" => EntryLiteral::DoubleQuote,
-            "#" => EntryLiteral::Hash,
-            "=" => EntryLiteral::Equals,
-            " " | "\t" | "\r" => EntryLiteral::Whitespace,
-            "\n" => EntryLiteral::Newline,
+            '@' => EntryLiteral::AtSign,
+            '{' => EntryLiteral::LeftBrace,
+            '}' => EntryLiteral::RightBrace,
+            ',' => EntryLiteral::Comma,
+            '"' => EntryLiteral::DoubleQuote,
+            '#' => EntryLiteral::Hash,
+            '=' => EntryLiteral::Equals,
+            ' ' | '\t' | '\r' => EntryLiteral::Whitespace,
+            '\n' => EntryLiteral::Newline,
             c => EntryLiteral::Other(c),
         }
     }
@@ -94,34 +95,6 @@ enum EntryEnvironment {
     ReadPropertyName,
     ReadValue(i32),
     End,
-    ErrorEnvironment(&'static str),
-}
-
-impl EntryEnvironment {
-    fn transition(&self, t: EntryLiteral) -> EntryEnvironment {
-        match (&self, t) {
-            (Idle, EntryLiteral::AtSign) => ReadType,
-            (ReadType, EntryLiteral::LeftBrace) => ReadSymbol,
-            (ReadSymbol, EntryLiteral::Comma) => Idle,
-            (Idle, EntryLiteral::Other(_)) => ReadPropertyName,
-            (ReadPropertyName, EntryLiteral::Whitespace) => Idle,
-            (Idle, EntryLiteral::Equals) => ReadValue(0),
-            (ReadValue(i), EntryLiteral::LeftBrace) => ReadValue(i + 1),
-            (ReadValue(i), EntryLiteral::RightBrace) => match i {
-                i32::MIN..=-1 => ErrorEnvironment(
-                    "Error when parsing bibtex. Possibly too many closing brackets?",
-                ),
-                i => ReadValue(*i - 1),
-            },
-            (ReadValue(i), EntryLiteral::Comma) => match i {
-                0 => Idle,
-                i => ReadValue(*i),
-            },
-            (Idle, EntryLiteral::Whitespace) => Idle,
-            (Idle, EntryLiteral::RightBrace) => End,
-            (_, _) => ErrorEnvironment("Error when parsing bibtex. Unexpected end of file."),
-        }
-    }
 }
 
 struct Tokenizer {
@@ -143,10 +116,17 @@ impl Tokenizer {
         }
     }
 
-    fn idle(&mut self) {
-        let next = self
-            .next_char()
-            .unwrap_or_else(|_| panic!("Buffer parsing error. Position: {}.", self.position_str()));
+    fn idle(&mut self) -> Result<(), Error> {
+        let next = self.next_char()?;
+        todo!()
+    }
+
+    fn next_literal(&mut self) -> Result<EntryLiteral, Error> {
+        let c = self.next_char()?;
+        match c {
+            Some(c) => Ok(EntryLiteral::from_char(c)),
+            None => Ok(EntryLiteral::EndOfFile),
+        }
     }
 
     fn next_char(&mut self) -> Result<Option<char>, Error> {
@@ -260,6 +240,27 @@ mod tokenizer_test {
     use super::*;
 
     #[test]
+    fn literals() {
+        vec![
+            ("@", EntryLiteral::AtSign),
+            ("\n", EntryLiteral::Newline),
+            ("a", EntryLiteral::Other('a')),
+            ("", EntryLiteral::EndOfFile),
+        ]
+        .iter()
+        .for_each(|(input, expected)| {
+            // given
+            let mut tokenizer = tokenizer_for_str(input);
+
+            // when
+            let actual = tokenizer.next_literal().unwrap();
+
+            // then
+            assert_eq!(actual, *expected);
+        });
+    }
+
+    #[test]
     fn position() {
         vec![
             (
@@ -298,8 +299,7 @@ mod tokenizer_test {
         .iter()
         .for_each(|(input, expected)| {
             // given
-            let reader = reader_from_str(input);
-            let mut tokenizer = Tokenizer::new(reader);
+            let mut tokenizer = tokenizer_for_str(input);
 
             // when
             for _ in 1..3 {
@@ -318,8 +318,7 @@ mod tokenizer_test {
             .iter()
             .for_each(|(input, expected)| {
                 // given
-                let reader = reader_from_str(input);
-                let mut tokenizer = Tokenizer::new(reader);
+                let mut tokenizer = tokenizer_for_str(input);
 
                 // when
                 let actual = tokenizer.next_char().unwrap();
@@ -335,9 +334,8 @@ mod tokenizer_test {
         unsafe {
             // given
             let utf8_buffer = &[255, 254, 253, 252];
-            let invalid_str = std::str::from_utf8_unchecked(utf8_buffer);
-            let reader = reader_from_str(invalid_str);
-            let mut tokenizer = Tokenizer::new(reader);
+            let input = std::str::from_utf8_unchecked(utf8_buffer);
+            let mut tokenizer = tokenizer_for_str(input);
 
             // when
             let actual = tokenizer.next_char().unwrap_err().to_string();
@@ -357,13 +355,12 @@ mod tokenizer_test {
     #[test]
     fn tokenize_bibtex_entry() {
         // given
-        let entry = r#"
+        let input = r#"
             @book{beck-2004,
               title     = {Extreme Programming Explained: Embrace Change},
-            }"#
-        .as_bytes();
+            }"#;
 
-        let tokenizer = Tokenizer::new(Box::new(entry));
+        let tokenizer = tokenizer_for_str(input);
 
         let expected = vec![
             EntryToken::Type(EntryType::Book),
@@ -377,5 +374,10 @@ mod tokenizer_test {
 
         // then
         assert_eq!(actual, expected)
+    }
+
+    fn tokenizer_for_str(input: &'static str) -> Tokenizer {
+        let reader = reader_from_str(input);
+        Tokenizer::new(reader)
     }
 }
