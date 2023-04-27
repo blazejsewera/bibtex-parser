@@ -19,7 +19,7 @@ impl EntryType {
 }
 
 #[derive(Debug, PartialEq)]
-enum BookProperty {
+enum EntryProperty {
     Title,
     Author,
     Date,
@@ -31,18 +31,18 @@ enum BookProperty {
     Other(String),
 }
 
-impl BookProperty {
-    fn from_str(s: &str) -> BookProperty {
+impl EntryProperty {
+    fn from_str(s: &str) -> EntryProperty {
         match s {
-            "title" => BookProperty::Title,
-            "author" => BookProperty::Author,
-            "date" => BookProperty::Date,
-            "edition" => BookProperty::Edition,
-            "isbn" => BookProperty::Isbn,
-            "series" => BookProperty::Series,
-            "pagetotal" => BookProperty::PageTotal,
-            "publisher" => BookProperty::Publisher,
-            s => BookProperty::Other(String::from(s)),
+            "title" => EntryProperty::Title,
+            "author" => EntryProperty::Author,
+            "date" => EntryProperty::Date,
+            "edition" => EntryProperty::Edition,
+            "isbn" => EntryProperty::Isbn,
+            "series" => EntryProperty::Series,
+            "pagetotal" => EntryProperty::PageTotal,
+            "publisher" => EntryProperty::Publisher,
+            s => EntryProperty::Other(String::from(s)),
         }
     }
 }
@@ -51,7 +51,7 @@ impl BookProperty {
 enum EntryToken {
     Type(EntryType),
     Symbol(String),
-    Property(BookProperty),
+    Property(EntryProperty),
     Value(String),
 }
 
@@ -168,7 +168,11 @@ impl Tokenizer {
         let literal = self.next_literal()?;
         match literal {
             EntryLiteral::Alphabetic(c) => {
-                self.current_token_value.push(c);
+                let cl = c
+                    .to_lowercase()
+                    .next()
+                    .expect("Couldn't convert to lowercase.");
+                self.current_token_value.push(cl);
                 Ok(())
             }
             EntryLiteral::LeftBrace => {
@@ -314,6 +318,61 @@ struct EntryContext {
 mod tokenizer_test {
     use super::*;
 
+    mod read_property_name {
+        use super::*;
+
+        #[test]
+        fn invalid_token() {
+            // given
+            let input = "@";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
+                "Unexpected token: '@'. Position: byte: 1 (line 1, column 1)",
+            );
+
+            // when
+            let actual = tokenizer.read_property_name().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn unexpected_eof() {
+            // given
+            let input = "";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
+            );
+
+            // when
+            let actual = tokenizer.read_property_name().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn valid_token() {
+            // given
+            let input = "abc=";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = EntryToken::Property(EntryProperty::Other(s!("abc")));
+
+            // when
+            for _ in 0..4 {
+                tokenizer.read_property_name().unwrap();
+            }
+            let actual = tokenizer.tokens.first().unwrap();
+
+            assert_eq!(*actual, expected);
+            assert_eq!(tokenizer.state, ReadValue(0));
+        }
+    }
+
     mod read_symbol {
         use super::*;
 
@@ -410,6 +469,23 @@ mod tokenizer_test {
         fn valid_token() {
             // given
             let input = "abc{";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = EntryToken::Type(EntryType::Other(s!("abc")));
+
+            // when
+            for _ in 0..4 {
+                tokenizer.read_type().unwrap();
+            }
+            let actual = tokenizer.tokens.first().unwrap();
+
+            assert_eq!(*actual, expected);
+            assert_eq!(tokenizer.state, ReadSymbol)
+        }
+
+        #[test]
+        fn to_lower_case() {
+            // given
+            let input = "AbC{";
             let mut tokenizer = tokenizer_for_str(input);
             let expected = EntryToken::Type(EntryType::Other(s!("abc")));
 
@@ -615,7 +691,7 @@ mod tokenizer_test {
         let expected = vec![
             EntryToken::Type(EntryType::Book),
             EntryToken::Symbol(s!("beck-2004")),
-            EntryToken::Property(BookProperty::Title),
+            EntryToken::Property(EntryProperty::Title),
             EntryToken::Value(s!("Extreme Programming Explained: Embrace Change")),
         ];
 
