@@ -1,5 +1,5 @@
 use std::io::{Error, ErrorKind, Read};
-use EntryEnvironment::*;
+use TokenizerState::*;
 
 use crate::s;
 
@@ -106,7 +106,7 @@ impl EntryLiteral {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum EntryEnvironment {
+enum TokenizerState {
     Idle,
     ReadType,
     ReadSymbol,
@@ -119,7 +119,7 @@ struct Tokenizer {
     buffer: Box<dyn Read>,
     current_token_value: String,
     tokens: Vec<EntryToken>,
-    state: EntryEnvironment,
+    state: TokenizerState,
     position: Position,
 }
 
@@ -136,6 +136,18 @@ impl Tokenizer {
                 column: 1,
             },
         }
+    }
+
+    fn read_value(&mut self) -> Result<(), Error> {
+        todo!("Here also has to be the handling of EOF in case there is no trailing comma.")
+    }
+
+    fn read_property_name(&mut self) -> Result<(), Error> {
+        todo!("Here also has to be the handling of EOF.")
+    }
+
+    fn read_symbol(&mut self) -> Result<(), Error> {
+        todo!()
     }
 
     fn read_type(&mut self) -> Result<(), Error> {
@@ -254,7 +266,7 @@ impl Tokenizer {
         )
     }
 
-    fn transition(&mut self, new_state: EntryEnvironment) {
+    fn transition(&mut self, new_state: TokenizerState) {
         self.current_token_value = String::new();
         self.state = new_state;
     }
@@ -281,7 +293,7 @@ struct Position {
 
 struct EntryContext {
     value: String,
-    env: EntryEnvironment,
+    env: TokenizerState,
 }
 
 #[cfg(test)]
