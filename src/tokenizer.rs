@@ -131,9 +131,9 @@ impl Tokenizer {
             tokens: Vec::new(),
             state: Idle,
             position: Position {
-                byte: 1,
+                byte: 0,
                 line: 1,
-                column: 1,
+                column: 0,
             },
         }
     }
@@ -255,7 +255,7 @@ impl Tokenizer {
     }
 
     fn advance_newline(&mut self) {
-        self.position.column = 1;
+        self.position.column = 0;
         self.position.line += 1;
     }
 
@@ -300,6 +300,27 @@ struct EntryContext {
 mod tokenizer_test {
     use super::*;
 
+    mod read_symbol {
+        use super::*;
+
+        #[test]
+        fn invalid_token() {
+            // given
+            let input = "@";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
+                "Unexpected token: '@'. Position: byte: 1 (line 1, column 1)",
+            );
+
+            // when
+            let actual = tokenizer.read_symbol().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+    }
+
     mod read_type {
         use super::*;
 
@@ -310,7 +331,7 @@ mod tokenizer_test {
             let mut tokenizer = tokenizer_for_str(input);
             let expected = Error::new(
                 ErrorKind::InvalidInput,
-                "Unexpected token: '!'. Position: byte: 2 (line 1, column 2)",
+                "Unexpected token: '!'. Position: byte: 1 (line 1, column 1)",
             );
 
             // when
@@ -327,7 +348,7 @@ mod tokenizer_test {
             let mut tokenizer = tokenizer_for_str(input);
             let expected = Error::new(
                 ErrorKind::UnexpectedEof,
-                "Unexpected EOF. Position: byte: 1 (line 1, column 1)",
+                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
             );
 
             // when
@@ -364,7 +385,7 @@ mod tokenizer_test {
             let mut tokenizer = tokenizer_for_str(input);
             let expected = Error::new(
                 ErrorKind::InvalidInput,
-                "Unexpected token: 'a'. Position: byte: 2 (line 1, column 2)",
+                "Unexpected token: 'a'. Position: byte: 1 (line 1, column 1)",
             );
 
             // when
@@ -386,7 +407,7 @@ mod tokenizer_test {
             let mut tokenizer = tokenizer_for_str(input);
             let expected = Error::new(
                 ErrorKind::UnexpectedEof,
-                "Unexpected EOF. Position: byte: 4 (line 2, column 1)",
+                "Unexpected EOF. Position: byte: 3 (line 2, column 0)",
             );
 
             // when
@@ -475,7 +496,7 @@ mod tokenizer_test {
             let mut tokenizer = tokenizer_for_str(input);
 
             // when
-            for _ in 1..3 {
+            for _ in 0..3 {
                 let _ = tokenizer.next_char();
             }
             let actual = tokenizer.position;
