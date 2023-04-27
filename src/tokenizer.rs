@@ -319,6 +319,40 @@ mod tokenizer_test {
             // then
             assert_io_error_eq(actual, expected);
         }
+
+        #[test]
+        fn unexpected_eof() {
+            // given
+            let input = "";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
+            );
+
+            // when
+            let actual = tokenizer.read_symbol().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn valid_token() {
+            // given
+            let input = "a-1,";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = EntryToken::Symbol(s!("a-1"));
+
+            // when
+            for _ in 0..4 {
+                tokenizer.read_type().unwrap();
+            }
+            let actual = tokenizer.tokens.first().unwrap();
+
+            assert_eq!(*actual, expected);
+            assert_eq!(tokenizer.state, ReadPropertyName)
+        }
     }
 
     mod read_type {
@@ -372,6 +406,7 @@ mod tokenizer_test {
             let actual = tokenizer.tokens.first().unwrap();
 
             assert_eq!(*actual, expected);
+            assert_eq!(tokenizer.state, ReadSymbol)
         }
     }
 
