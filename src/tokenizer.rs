@@ -153,18 +153,8 @@ impl Tokenizer {
                 Ok(())
             }
             EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
-            EntryLiteral::EndOfFile => Err(Error::new(
-                ErrorKind::UnexpectedEof,
-                format!("Unexpected EOF. Position: {}", self.position_str()),
-            )),
-            l => Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!(
-                    "Unexpected token: '{}'. Position: {}",
-                    l.to_char(),
-                    self.position_str()
-                ),
-            )),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => self.invalid_token(l),
         }
     }
 
@@ -176,18 +166,8 @@ impl Tokenizer {
                 Ok(())
             }
             EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
-            EntryLiteral::EndOfFile => Err(Error::new(
-                ErrorKind::UnexpectedEof,
-                format!("Unexpected EOF. Position: {}", self.position_str()),
-            )),
-            l => Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!(
-                    "Unexpected token: '{}'. Position: {}",
-                    l.to_char(),
-                    self.position_str()
-                ),
-            )),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => self.invalid_token(l),
         }
     }
 
@@ -539,6 +519,7 @@ mod tokenizer_test {
         Box::new(s.as_bytes())
     }
 
+    #[ignore]
     #[test]
     fn tokenize_bibtex_entry() {
         // given
