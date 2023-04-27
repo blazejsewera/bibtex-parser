@@ -103,7 +103,7 @@ impl EntryLiteral {
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum EntryEnvironment {
     Idle,
     ReadType,
@@ -277,6 +277,63 @@ struct EntryContext {
 mod tokenizer_test {
     use super::*;
 
+    mod idle {
+        use super::*;
+
+        #[test]
+        fn invalid_token() {
+            // given
+            let input = "abc";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
+                "Unexpected token: 'a'. Position: byte: 2 (line 1, column 2)",
+            );
+
+            // when
+            let actual = tokenizer.idle().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn unexpected_eof() {
+            // given
+            let input = " \t\n";
+            fn consume_whitespace(tokenizer: &mut Tokenizer) {
+                for _ in 0..3 {
+                    let _ = tokenizer.idle();
+                }
+            }
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected EOF. Position: byte: 4 (line 2, column 1)",
+            );
+
+            // when
+            consume_whitespace(&mut tokenizer);
+            let actual = tokenizer.idle().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn valid_token() {
+            // given
+            let input = "@abc";
+            let mut tokenizer = tokenizer_for_str(input);
+
+            // when
+            tokenizer.idle().unwrap();
+
+            // then
+            assert_eq!(tokenizer.state, ReadType);
+        }
+    }
+
     #[test]
     fn literals() {
         vec![
@@ -374,16 +431,22 @@ mod tokenizer_test {
             let utf8_buffer = &[255, 254, 253, 252];
             let input = std::str::from_utf8_unchecked(utf8_buffer);
             let mut tokenizer = tokenizer_for_str(input);
-
-            // when
-            let actual = tokenizer.next_char().unwrap_err().to_string();
-
-            // then
-            assert_eq!(
-                actual,
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
                 s!("Cannot decode bytes to UTF-8. Bytes: [ff fe fd fc]"),
             );
+
+            // when
+            let actual = tokenizer.next_char().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
         }
+    }
+
+    fn assert_io_error_eq(actual: Error, expected: Error) {
+        assert_eq!(actual.kind(), expected.kind(),);
+        assert_eq!(actual.to_string(), expected.to_string(),);
     }
 
     fn reader_from_str(s: &str) -> Box<dyn Read + '_> {
