@@ -61,12 +61,13 @@ enum EntryLiteral {
     LeftBrace,
     RightBrace,
     Comma,
-    Equals,
-    Whitespace,
-    Other(char),
-    Newline,
     DoubleQuote,
     Hash,
+    Equals,
+    Whitespace,
+    Newline,
+    Alphabetic(char),
+    Other(char),
     EndOfFile,
 }
 
@@ -82,6 +83,7 @@ impl EntryLiteral {
             '=' => EntryLiteral::Equals,
             ' ' | '\t' | '\r' => EntryLiteral::Whitespace,
             '\n' => EntryLiteral::Newline,
+            c if c.is_alphabetic() => EntryLiteral::Alphabetic(c),
             c => EntryLiteral::Other(c),
         }
     }
@@ -97,7 +99,7 @@ impl EntryLiteral {
             EntryLiteral::Equals => '=',
             EntryLiteral::Whitespace => ' ',
             EntryLiteral::Newline => '\n',
-            EntryLiteral::Other(c) => *c,
+            EntryLiteral::Other(c) | EntryLiteral::Alphabetic(c) => *c,
             EntryLiteral::EndOfFile => '%',
         }
     }
@@ -115,6 +117,8 @@ enum EntryEnvironment {
 
 struct Tokenizer {
     buffer: Box<dyn Read>,
+    current_token_value: String,
+    tokens: Vec<EntryToken>,
     state: EntryEnvironment,
     position: Position,
 }
@@ -123,12 +127,44 @@ impl Tokenizer {
     fn new(buffer: Box<dyn Read>) -> Tokenizer {
         Tokenizer {
             buffer,
+            current_token_value: String::new(),
+            tokens: Vec::new(),
             state: Idle,
             position: Position {
                 byte: 1,
                 line: 1,
                 column: 1,
             },
+        }
+    }
+
+    fn read_type(&mut self) -> Result<(), Error> {
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::Alphabetic(c) => {
+                self.current_token_value.push(c);
+                Ok(())
+            }
+            EntryLiteral::LeftBrace => {
+                self.add_token(EntryToken::Type(EntryType::from_str(
+                    self.current_token_value.as_str(),
+                )));
+                self.transition(ReadSymbol);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                format!("Unexpected EOF. Position: {}", self.position_str()),
+            )),
+            l => Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "Unexpected token: '{}'. Position: {}",
+                    l.to_char(),
+                    self.position_str()
+                ),
+            )),
         }
     }
 
@@ -153,6 +189,24 @@ impl Tokenizer {
                 ),
             )),
         }
+    }
+
+    fn unexpected_eof(&self) -> Result<(), Error> {
+        Err(Error::new(
+            ErrorKind::UnexpectedEof,
+            format!("Unexpected EOF. Position: {}", self.position_str()),
+        ))
+    }
+
+    fn invalid_token(&self, l: EntryLiteral) -> Result<(), Error> {
+        Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!(
+                "Unexpected token: '{}'. Position: {}",
+                l.to_char(),
+                self.position_str()
+            ),
+        ))
     }
 
     fn next_literal(&mut self) -> Result<EntryLiteral, Error> {
@@ -221,35 +275,12 @@ impl Tokenizer {
     }
 
     fn transition(&mut self, new_state: EntryEnvironment) {
+        self.current_token_value = String::new();
         self.state = new_state;
     }
 
-    fn new_state_from_literal(
-        &self,
-        literal: EntryLiteral,
-    ) -> Result<EntryEnvironment, &'static str> {
-        match (&self.state, literal) {
-            (Idle, EntryLiteral::AtSign) => Ok(ReadType),
-            (ReadType, EntryLiteral::LeftBrace) => Ok(ReadSymbol),
-            (ReadSymbol, EntryLiteral::Comma) => Ok(Idle),
-            (Idle, EntryLiteral::Other(_)) => Ok(ReadPropertyName),
-            (ReadPropertyName, EntryLiteral::Whitespace) => Ok(Idle),
-            (Idle, EntryLiteral::Equals) => Ok(ReadValue(0)),
-            (ReadValue(i), EntryLiteral::LeftBrace) => Ok(ReadValue(i + 1)),
-            (ReadValue(i), EntryLiteral::RightBrace) => match i {
-                i32::MIN..=-1 => {
-                    Err("Error when parsing bibtex. Possibly too many closing brackets?")
-                }
-                i => Ok(ReadValue(*i - 1)),
-            },
-            (ReadValue(i), EntryLiteral::Comma) => match i {
-                0 => Ok(Idle),
-                i => Ok(ReadValue(*i)),
-            },
-            (Idle, EntryLiteral::Whitespace) => Ok(Idle),
-            (Idle, EntryLiteral::RightBrace) => Ok(End),
-            (_, _) => Err("Error when parsing bibtex. Unexpected end of file."),
-        }
+    fn add_token(&mut self, token: EntryToken) {
+        self.tokens.push(token);
     }
 }
 
@@ -276,6 +307,60 @@ struct EntryContext {
 #[cfg(test)]
 mod tokenizer_test {
     use super::*;
+
+    mod read_type {
+        use super::*;
+
+        #[test]
+        fn invalid_token() {
+            // given
+            let input = "!";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
+                "Unexpected token: '!'. Position: byte: 2 (line 1, column 2)",
+            );
+
+            // when
+            let actual = tokenizer.idle().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn unexpected_eof() {
+            // given
+            let input = "";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected EOF. Position: byte: 1 (line 1, column 1)",
+            );
+
+            // when
+            let actual = tokenizer.read_type().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn valid_token() {
+            // given
+            let input = "abc{";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = EntryToken::Type(EntryType::Other(s!("abc")));
+
+            // when
+            for _ in 0..4 {
+                tokenizer.read_type().unwrap();
+            }
+            let actual = tokenizer.tokens.first().unwrap();
+
+            assert_eq!(*actual, expected);
+        }
+    }
 
     mod idle {
         use super::*;
@@ -339,7 +424,8 @@ mod tokenizer_test {
         vec![
             ("@", EntryLiteral::AtSign),
             ("\n", EntryLiteral::Newline),
-            ("a", EntryLiteral::Other('a')),
+            ("a", EntryLiteral::Alphabetic('a')),
+            ("!", EntryLiteral::Other('!')),
             ("", EntryLiteral::EndOfFile),
         ]
         .iter()
