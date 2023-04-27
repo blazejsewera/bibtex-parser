@@ -346,7 +346,7 @@ mod tokenizer_test {
 
             // when
             for _ in 0..4 {
-                tokenizer.read_type().unwrap();
+                tokenizer.read_symbol().unwrap();
             }
             let actual = tokenizer.tokens.first().unwrap();
 
