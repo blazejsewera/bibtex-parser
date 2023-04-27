@@ -147,7 +147,21 @@ impl Tokenizer {
     }
 
     fn read_symbol(&mut self) -> Result<(), Error> {
-        todo!()
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::Alphabetic(c) | EntryLiteral::Other(c) => {
+                self.current_token_value.push(c);
+                Ok(())
+            }
+            EntryLiteral::Comma => {
+                self.add_token(EntryToken::Symbol(self.current_token_value.clone()));
+                self.transition(ReadPropertyName);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => self.invalid_token(l),
+        }
     }
 
     fn read_type(&mut self) -> Result<(), Error> {
