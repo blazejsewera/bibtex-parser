@@ -145,7 +145,7 @@ impl Tokenizer {
         }
     }
 
-    fn tokenize(&self) -> Vec<EntryToken> {
+    fn tokenize(&mut self) -> Vec<EntryToken> {
         todo!()
     }
 
@@ -721,7 +721,7 @@ mod tokenizer_test {
               title     = {Extreme Programming Explained: Embrace Change},
             }"#;
 
-        let tokenizer = tokenizer_for_str(input);
+        let mut tokenizer = tokenizer_for_str(input);
 
         let expected = vec![
             EntryToken::Type(EntryType::Book),
