@@ -111,8 +111,15 @@ enum TokenizerState {
     ReadType,
     ReadSymbol,
     ReadPropertyName,
-    ReadValue(i32),
+    ReadValue(TokenizerReadValueMode),
     End,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum TokenizerReadValueMode {
+    Normal,
+    DoubleQuoted,
+    Braced,
 }
 
 struct Tokenizer {
@@ -143,7 +150,27 @@ impl Tokenizer {
     }
 
     fn read_property_name(&mut self) -> Result<(), Error> {
-        todo!("Here also has to be the handling of EOF.")
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::Alphabetic(c) => {
+                self.current_token_value.push(c);
+                Ok(())
+            }
+            EntryLiteral::Equals => {
+                self.add_token(EntryToken::Property(EntryProperty::from_str(
+                    self.current_token_value.as_str(),
+                )));
+                self.transition(ReadValue(TokenizerReadValueMode::Normal));
+                Ok(())
+            }
+            EntryLiteral::RightBrace => {
+                self.transition(End);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => self.invalid_token(l),
+        }
     }
 
     fn read_symbol(&mut self) -> Result<(), Error> {
@@ -369,7 +396,7 @@ mod tokenizer_test {
             let actual = tokenizer.tokens.first().unwrap();
 
             assert_eq!(*actual, expected);
-            assert_eq!(tokenizer.state, ReadValue(0));
+            assert_eq!(tokenizer.state, ReadValue(TokenizerReadValueMode::Normal));
         }
 
         #[test]
