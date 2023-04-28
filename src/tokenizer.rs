@@ -145,6 +145,10 @@ impl Tokenizer {
         }
     }
 
+    fn tokenize(&self) -> Vec<EntryToken> {
+        todo!()
+    }
+
     fn read_value(&mut self) -> Result<(), Error> {
         todo!("Here also has to be the handling of EOF in case there is no trailing comma.")
     }
@@ -318,14 +322,6 @@ impl Tokenizer {
 
     fn add_token(&mut self, token: EntryToken) {
         self.tokens.push(token);
-    }
-}
-
-impl Iterator for Tokenizer {
-    type Item = EntryToken;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
     }
 }
 
@@ -735,7 +731,7 @@ mod tokenizer_test {
         ];
 
         // when
-        let actual: Vec<EntryToken> = tokenizer.collect();
+        let actual: Vec<EntryToken> = tokenizer.tokenize();
 
         // then
         assert_eq!(actual, expected)
