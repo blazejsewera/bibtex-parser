@@ -356,7 +356,7 @@ mod tokenizer_test {
         }
 
         #[test]
-        fn valid_token() {
+        fn valid_transition_to_reading_value() {
             // given
             let input = "abc=";
             let mut tokenizer = tokenizer_for_str(input);
@@ -370,6 +370,18 @@ mod tokenizer_test {
 
             assert_eq!(*actual, expected);
             assert_eq!(tokenizer.state, ReadValue(0));
+        }
+
+        #[test]
+        fn valid_transition_to_end() {
+            // given
+            let input = "}";
+            let mut tokenizer = tokenizer_for_str(input);
+
+            // when
+            tokenizer.read_property_name().unwrap();
+
+            assert_eq!(tokenizer.state, End);
         }
     }
 
