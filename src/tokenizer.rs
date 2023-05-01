@@ -152,11 +152,50 @@ impl Tokenizer {
     }
 
     fn read_value_braced(&mut self) -> Result<(), Error> {
-        todo!()
+        let literal = self.next_literal()?;
+        let brace_level: i32 = match self.state {
+            ReadValue(TokenizerReadValueMode::Braced(i)) => i,
+            _ => 0,
+        };
+        match literal {
+            EntryLiteral::RightBrace => {
+                self.transition_keep_value(ReadValue(Self::right_brace_mode(brace_level)));
+                Ok(())
+            }
+            EntryLiteral::LeftBrace => {
+                self.transition_keep_value(ReadValue(TokenizerReadValueMode::Braced(
+                    brace_level + 1,
+                )));
+                Ok(())
+            }
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => {
+                self.current_token_value.push(l.to_char());
+                Ok(())
+            }
+        }
+    }
+
+    fn right_brace_mode(brace_level: i32) -> TokenizerReadValueMode {
+        match brace_level {
+            bl if bl > 0 => TokenizerReadValueMode::Braced(bl - 1),
+            _ => TokenizerReadValueMode::Normal,
+        }
     }
 
     fn read_value_double_quoted(&mut self) -> Result<(), Error> {
-        todo!()
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::DoubleQuote => {
+                self.transition_keep_value(ReadValue(TokenizerReadValueMode::Normal));
+                Ok(())
+            }
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => {
+                self.current_token_value.push(l.to_char());
+                Ok(())
+            }
+        }
     }
 
     fn read_value(&mut self) -> Result<(), Error> {
@@ -164,6 +203,14 @@ impl Tokenizer {
         match literal {
             EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) => {
                 self.current_token_value.push(c);
+                Ok(())
+            }
+            EntryLiteral::DoubleQuote => {
+                self.transition_keep_value(ReadValue(TokenizerReadValueMode::DoubleQuoted));
+                Ok(())
+            }
+            EntryLiteral::LeftBrace => {
+                self.transition_keep_value(ReadValue(TokenizerReadValueMode::Braced(0)));
                 Ok(())
             }
             EntryLiteral::Comma => {
@@ -346,6 +393,10 @@ impl Tokenizer {
 
     fn transition(&mut self, new_state: TokenizerState) {
         self.current_token_value = String::new();
+        self.state = new_state;
+    }
+
+    fn transition_keep_value(&mut self, new_state: TokenizerState) {
         self.state = new_state;
     }
 
