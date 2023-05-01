@@ -67,6 +67,7 @@ enum EntryLiteral {
     Whitespace,
     Newline,
     Alphabetic(char),
+    Numeric(char),
     Other(char),
     EndOfFile,
 }
@@ -84,6 +85,7 @@ impl EntryLiteral {
             ' ' | '\t' | '\r' => EntryLiteral::Whitespace,
             '\n' => EntryLiteral::Newline,
             c if c.is_alphabetic() => EntryLiteral::Alphabetic(c),
+            c if c.is_numeric() => EntryLiteral::Numeric(c),
             c => EntryLiteral::Other(c),
         }
     }
@@ -99,7 +101,7 @@ impl EntryLiteral {
             EntryLiteral::Equals => '=',
             EntryLiteral::Whitespace => ' ',
             EntryLiteral::Newline => '\n',
-            EntryLiteral::Other(c) | EntryLiteral::Alphabetic(c) => *c,
+            EntryLiteral::Other(c) | EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) => *c,
             EntryLiteral::EndOfFile => '%',
         }
     }
@@ -158,7 +160,26 @@ impl Tokenizer {
     }
 
     fn read_value(&mut self) -> Result<(), Error> {
-        todo!("Here also has to be the handling of EOF in case there is no trailing comma.")
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) => {
+                self.current_token_value.push(c);
+                Ok(())
+            }
+            EntryLiteral::Comma => {
+                self.add_token(EntryToken::Value(self.current_token_value.clone()));
+                self.transition(ReadPropertyName);
+                Ok(())
+            }
+            EntryLiteral::RightBrace => {
+                self.add_token(EntryToken::Value(self.current_token_value.clone()));
+                self.transition(End);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => self.invalid_token(l),
+        }
     }
 
     fn read_property_name(&mut self) -> Result<(), Error> {
@@ -188,7 +209,7 @@ impl Tokenizer {
     fn read_symbol(&mut self) -> Result<(), Error> {
         let literal = self.next_literal()?;
         match literal {
-            EntryLiteral::Alphabetic(c) | EntryLiteral::Other(c) => {
+            EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) | EntryLiteral::Other(c) => {
                 self.current_token_value.push(c);
                 Ok(())
             }
