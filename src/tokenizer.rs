@@ -3,7 +3,7 @@ use TokenizerState::*;
 
 use crate::s;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum EntryToken {
     Type(String),
     Symbol(String),
@@ -104,7 +104,50 @@ impl Tokenizer {
     }
 
     fn tokenize(&mut self) -> Vec<EntryToken> {
-        todo!()
+        loop {
+            let result = match self.state {
+                Idle => self.idle(),
+                ReadType => self.read_type(),
+                ReadSymbol => self.read_symbol(),
+                ReadPropertyName => self.read_property_name(),
+                ReadValue(TokenizerReadValueMode::Normal) => self.read_value(),
+                ReadValue(TokenizerReadValueMode::DoubleQuoted) => self.read_value_double_quoted(),
+                ReadValue(TokenizerReadValueMode::Braced(_)) => self.read_value_braced(),
+                End => {
+                    let end_result = self.end();
+                    match end_result {
+                        Ok(()) => break,
+                        e => e,
+                    }
+                }
+            };
+            match result {
+                Ok(()) => continue,
+                Err(e) => panic!("{}", e),
+            };
+        }
+        self.tokens.clone()
+    }
+
+    fn tokenize_one_char(&mut self) -> Result<(), Error> {
+        match self.state {
+            Idle => self.idle(),
+            ReadType => self.read_type(),
+            ReadSymbol => self.read_symbol(),
+            ReadPropertyName => self.read_property_name(),
+            ReadValue(TokenizerReadValueMode::Normal) => self.read_value(),
+            ReadValue(TokenizerReadValueMode::DoubleQuoted) => self.read_value_double_quoted(),
+            ReadValue(TokenizerReadValueMode::Braced(_)) => self.read_value_braced(),
+            End => self.end(),
+        }
+    }
+
+    fn end(&mut self) -> Result<(), Error> {
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::Whitespace | EntryLiteral::Newline | EntryLiteral::EndOfFile => Ok(()),
+            l => self.invalid_token(l),
+        }
     }
 
     fn read_value_braced(&mut self) -> Result<(), Error> {
@@ -929,7 +972,6 @@ mod tokenizer_test {
         Box::new(s.as_bytes())
     }
 
-    #[ignore]
     #[test]
     fn tokenize_bibtex_entry() {
         // given
