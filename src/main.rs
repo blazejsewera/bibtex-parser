@@ -6,6 +6,50 @@ fn main() {
     parse_bibtex(s!("hello"));
 }
 
+#[derive(Debug, PartialEq)]
+enum EntryType {
+    Book,
+    Other(String),
+}
+
+impl EntryType {
+    fn from_str(s: &str) -> EntryType {
+        match s {
+            "book" => EntryType::Book,
+            s => EntryType::Other(String::from(s)),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum EntryProperty {
+    Title,
+    Author,
+    Date,
+    Edition,
+    Isbn,
+    Series,
+    PageTotal,
+    Publisher,
+    Other(String),
+}
+
+impl EntryProperty {
+    fn from_str(s: &str) -> EntryProperty {
+        match s {
+            "title" => EntryProperty::Title,
+            "author" => EntryProperty::Author,
+            "date" => EntryProperty::Date,
+            "edition" => EntryProperty::Edition,
+            "isbn" => EntryProperty::Isbn,
+            "series" => EntryProperty::Series,
+            "pagetotal" => EntryProperty::PageTotal,
+            "publisher" => EntryProperty::Publisher,
+            s => EntryProperty::Other(String::from(s)),
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 struct Book {
     symbol: String,

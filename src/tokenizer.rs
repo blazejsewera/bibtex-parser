@@ -4,54 +4,10 @@ use TokenizerState::*;
 use crate::s;
 
 #[derive(Debug, PartialEq)]
-enum EntryType {
-    Book,
-    Other(String),
-}
-
-impl EntryType {
-    fn from_str(s: &str) -> EntryType {
-        match s {
-            "book" => EntryType::Book,
-            s => EntryType::Other(String::from(s)),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-enum EntryProperty {
-    Title,
-    Author,
-    Date,
-    Edition,
-    Isbn,
-    Series,
-    PageTotal,
-    Publisher,
-    Other(String),
-}
-
-impl EntryProperty {
-    fn from_str(s: &str) -> EntryProperty {
-        match s {
-            "title" => EntryProperty::Title,
-            "author" => EntryProperty::Author,
-            "date" => EntryProperty::Date,
-            "edition" => EntryProperty::Edition,
-            "isbn" => EntryProperty::Isbn,
-            "series" => EntryProperty::Series,
-            "pagetotal" => EntryProperty::PageTotal,
-            "publisher" => EntryProperty::Publisher,
-            s => EntryProperty::Other(String::from(s)),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
 enum EntryToken {
-    Type(EntryType),
+    Type(String),
     Symbol(String),
-    Property(EntryProperty),
+    Property(String),
     Value(String),
 }
 
@@ -237,9 +193,7 @@ impl Tokenizer {
                 Ok(())
             }
             EntryLiteral::Equals => {
-                self.add_token(EntryToken::Property(EntryProperty::from_str(
-                    self.current_token_value.as_str(),
-                )));
+                self.add_token(EntryToken::Property(self.current_token_value.clone()));
                 self.transition(ReadValue(TokenizerReadValueMode::Normal));
                 Ok(())
             }
@@ -283,9 +237,7 @@ impl Tokenizer {
                 Ok(())
             }
             EntryLiteral::LeftBrace => {
-                self.add_token(EntryToken::Type(EntryType::from_str(
-                    self.current_token_value.as_str(),
-                )));
+                self.add_token(EntryToken::Type(self.current_token_value.clone()));
                 self.transition(ReadSymbol);
                 Ok(())
             }
@@ -646,7 +598,7 @@ mod tokenizer_test {
             // given
             let input = "abc=";
             let mut tokenizer = tokenizer_for_str(input);
-            let expected = EntryToken::Property(EntryProperty::Other(s!("abc")));
+            let expected = EntryToken::Property(s!("abc"));
 
             // when
             for _ in 0..4 {
@@ -770,7 +722,7 @@ mod tokenizer_test {
             // given
             let input = "abc{";
             let mut tokenizer = tokenizer_for_str(input);
-            let expected = EntryToken::Type(EntryType::Other(s!("abc")));
+            let expected = EntryToken::Type(s!("abc"));
 
             // when
             for _ in 0..4 {
@@ -787,7 +739,7 @@ mod tokenizer_test {
             // given
             let input = "AbC{";
             let mut tokenizer = tokenizer_for_str(input);
-            let expected = EntryToken::Type(EntryType::Other(s!("abc")));
+            let expected = EntryToken::Type(s!("abc"));
 
             // when
             for _ in 0..4 {
@@ -989,9 +941,9 @@ mod tokenizer_test {
         let mut tokenizer = tokenizer_for_str(input);
 
         let expected = vec![
-            EntryToken::Type(EntryType::Book),
+            EntryToken::Type(s!("book")),
             EntryToken::Symbol(s!("beck-2004")),
-            EntryToken::Property(EntryProperty::Title),
+            EntryToken::Property(s!("title")),
             EntryToken::Value(s!("Extreme Programming Explained: Embrace Change")),
         ];
 
