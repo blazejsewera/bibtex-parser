@@ -119,7 +119,7 @@ enum TokenizerState {
 enum TokenizerReadValueMode {
     Normal,
     DoubleQuoted,
-    Braced,
+    Braced(i32),
 }
 
 struct Tokenizer {
@@ -146,6 +146,14 @@ impl Tokenizer {
     }
 
     fn tokenize(&mut self) -> Vec<EntryToken> {
+        todo!()
+    }
+
+    fn read_value_braced(&mut self) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn read_value_double_quoted(&mut self) -> Result<(), Error> {
         todo!()
     }
 
@@ -341,6 +349,189 @@ struct EntryContext {
 mod tokenizer_test {
     use super::*;
 
+    mod read_value {
+        use super::*;
+
+        #[test]
+        fn invalid_token() {
+            // given
+            let input = "@";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
+                "Unexpected token: '@'. Position: byte: 1 (line 1, column 1)",
+            );
+
+            // when
+            let actual = tokenizer.read_value().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn unexpected_eof() {
+            // given
+            let input = "";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
+            );
+
+            // when
+            let actual = tokenizer.read_value().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        mod read_value_double_quoted {
+            use super::*;
+
+            #[test]
+            fn valid_transition_to_double_quoted() {
+                // given
+                let input = "\"";
+                let mut tokenizer = tokenizer_for_str(input);
+
+                // when
+                tokenizer.read_value().unwrap();
+
+                // then
+                assert_eq!(
+                    tokenizer.state,
+                    ReadValue(TokenizerReadValueMode::DoubleQuoted)
+                );
+            }
+
+            #[test]
+            fn valid_transition_out_of_double_quoted() {
+                // given
+                let input = "\"";
+                let mut tokenizer = tokenizer_for_str(input);
+
+                // when
+                tokenizer.read_value_double_quoted().unwrap();
+
+                // then
+                assert_eq!(tokenizer.state, ReadValue(TokenizerReadValueMode::Normal))
+            }
+
+            #[test]
+            fn valid_special_char_handling() {
+                // given
+                let input = "a b@c";
+                let mut tokenizer = tokenizer_for_str(input);
+                let expected = "a b@c";
+
+                // when
+                for _ in 0..5 {
+                    tokenizer.read_value_double_quoted().unwrap();
+                }
+                let actual = tokenizer.current_token_value.as_str();
+
+                assert_eq!(actual, expected);
+            }
+        }
+
+        mod read_value_braced {
+            use super::*;
+
+            #[test]
+            fn valid_transition_to_braced() {
+                // given
+                let input = "{";
+                let mut tokenizer = tokenizer_for_str(input);
+
+                // when
+                tokenizer.read_value().unwrap();
+
+                // then
+                assert_eq!(
+                    tokenizer.state,
+                    ReadValue(TokenizerReadValueMode::Braced(0))
+                );
+            }
+
+            #[test]
+            fn valid_deeper_braced() {
+                // given
+                let input = "{{";
+                let mut tokenizer = tokenizer_for_str(input);
+
+                // when
+                tokenizer.read_value().unwrap();
+                tokenizer.read_value_braced().unwrap();
+
+                // then
+                assert_eq!(
+                    tokenizer.state,
+                    ReadValue(TokenizerReadValueMode::Braced(1))
+                );
+            }
+
+            #[test]
+            fn valid_transition_out_of_braced() {
+                // given
+                let input = "}";
+                let mut tokenizer = tokenizer_for_str(input);
+
+                // when
+                tokenizer.read_value_braced().unwrap();
+
+                // then
+                assert_eq!(tokenizer.state, ReadValue(TokenizerReadValueMode::Normal));
+            }
+
+            #[test]
+            fn valid_special_char_handling_multiple_braces() {
+                // given
+                let input = "a b{@}c";
+                let mut tokenizer = tokenizer_for_str(input);
+                let expected = "a b@c";
+
+                // when
+                for _ in 0..7 {
+                    tokenizer.read_value_braced().unwrap();
+                }
+                let actual = tokenizer.current_token_value.as_str();
+
+                assert_eq!(actual, expected);
+            }
+        }
+
+        #[test]
+        fn valid_transition_to_reading_property_name() {
+            // given
+            let input = "abc,";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = EntryToken::Value(s!("abc"));
+
+            // when
+            for _ in 0..4 {
+                tokenizer.read_value().unwrap();
+            }
+            let actual = tokenizer.tokens.first().unwrap();
+
+            assert_eq!(*actual, expected);
+            assert_eq!(tokenizer.state, ReadPropertyName);
+        }
+
+        #[test]
+        fn valid_transition_to_end() {
+            // given
+            let input = "}";
+            let mut tokenizer = tokenizer_for_str(input);
+
+            // when
+            tokenizer.read_value().unwrap();
+
+            // then
+            assert_eq!(tokenizer.state, End);
+        }
+    }
+
     mod read_property_name {
         use super::*;
 
@@ -391,6 +582,7 @@ mod tokenizer_test {
             }
             let actual = tokenizer.tokens.first().unwrap();
 
+            // then
             assert_eq!(*actual, expected);
             assert_eq!(tokenizer.state, ReadValue(TokenizerReadValueMode::Normal));
         }
@@ -404,6 +596,7 @@ mod tokenizer_test {
             // when
             tokenizer.read_property_name().unwrap();
 
+            // then
             assert_eq!(tokenizer.state, End);
         }
     }
