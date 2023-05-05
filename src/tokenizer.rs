@@ -9,75 +9,6 @@ pub(crate) enum EntryToken {
     Value(String),
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum EntryLiteral {
-    AtSign,
-    LeftBrace,
-    RightBrace,
-    Comma,
-    DoubleQuote,
-    Hash,
-    Equals,
-    Whitespace,
-    Newline,
-    Alphabetic(char),
-    Numeric(char),
-    Other(char),
-    EndOfFile,
-}
-
-impl EntryLiteral {
-    fn from_char(c: char) -> EntryLiteral {
-        match c {
-            '@' => EntryLiteral::AtSign,
-            '{' => EntryLiteral::LeftBrace,
-            '}' => EntryLiteral::RightBrace,
-            ',' => EntryLiteral::Comma,
-            '"' => EntryLiteral::DoubleQuote,
-            '#' => EntryLiteral::Hash,
-            '=' => EntryLiteral::Equals,
-            ' ' | '\t' | '\r' => EntryLiteral::Whitespace,
-            '\n' => EntryLiteral::Newline,
-            c if c.is_alphabetic() => EntryLiteral::Alphabetic(c),
-            c if c.is_numeric() => EntryLiteral::Numeric(c),
-            c => EntryLiteral::Other(c),
-        }
-    }
-
-    fn to_char(self) -> char {
-        match &self {
-            EntryLiteral::AtSign => '@',
-            EntryLiteral::LeftBrace => '{',
-            EntryLiteral::RightBrace => '}',
-            EntryLiteral::Comma => ',',
-            EntryLiteral::DoubleQuote => '"',
-            EntryLiteral::Hash => '#',
-            EntryLiteral::Equals => '=',
-            EntryLiteral::Whitespace => ' ',
-            EntryLiteral::Newline => '\n',
-            EntryLiteral::Other(c) | EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) => *c,
-            EntryLiteral::EndOfFile => '%',
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum TokenizerState {
-    Idle,
-    ReadType,
-    ReadSymbol,
-    ReadPropertyName,
-    ReadValue(TokenizerReadValueMode),
-    End,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum TokenizerReadValueMode {
-    Normal,
-    DoubleQuoted,
-    Braced(i32),
-}
-
 pub(crate) struct Tokenizer {
     buffer: Box<dyn Read>,
     current_token_value: String,
@@ -109,7 +40,7 @@ impl Tokenizer {
                 ReadSymbol => self.read_symbol(),
                 ReadPropertyName => self.read_property_name(),
                 ReadValue(TokenizerReadValueMode::Normal) => self.read_value(),
-                ReadValue(TokenizerReadValueMode::DoubleQuoted) => self.read_value_double_quoted(),
+                ReadValue(TokenizerReadValueMode::DoubleQuoted) => self.read_value_quoted(),
                 ReadValue(TokenizerReadValueMode::Braced(_)) => self.read_value_braced(),
                 End => {
                     let end_result = self.end();
@@ -127,11 +58,124 @@ impl Tokenizer {
         self.tokens.clone()
     }
 
-    fn end(&mut self) -> Result<(), Error> {
+    fn idle(&mut self) -> Result<(), Error> {
         let literal = self.next_literal()?;
         match literal {
-            EntryLiteral::Whitespace | EntryLiteral::Newline | EntryLiteral::EndOfFile => Ok(()),
+            EntryLiteral::AtSign => {
+                self.transition(ReadType);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
             l => self.invalid_token(l),
+        }
+    }
+
+    fn read_type(&mut self) -> Result<(), Error> {
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::Alphabetic(c) => {
+                let cl = c
+                    .to_lowercase()
+                    .next()
+                    .expect("Couldn't convert to lowercase.");
+                self.current_token_value.push(cl);
+                Ok(())
+            }
+            EntryLiteral::LeftBrace => {
+                self.add_token(EntryToken::Type(self.current_token_value.clone()));
+                self.transition(ReadSymbol);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => self.invalid_token(l),
+        }
+    }
+
+    fn read_symbol(&mut self) -> Result<(), Error> {
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) | EntryLiteral::Other(c) => {
+                self.current_token_value.push(c);
+                Ok(())
+            }
+            EntryLiteral::Comma => {
+                self.add_token(EntryToken::Symbol(self.current_token_value.clone()));
+                self.transition(ReadPropertyName);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => self.invalid_token(l),
+        }
+    }
+
+    fn read_property_name(&mut self) -> Result<(), Error> {
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::Alphabetic(c) => {
+                self.current_token_value.push(c);
+                Ok(())
+            }
+            EntryLiteral::Equals => {
+                self.add_token(EntryToken::Property(self.current_token_value.clone()));
+                self.transition(ReadValue(TokenizerReadValueMode::Normal));
+                Ok(())
+            }
+            EntryLiteral::RightBrace => {
+                self.transition(End);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => self.invalid_token(l),
+        }
+    }
+
+    fn read_value(&mut self) -> Result<(), Error> {
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) => {
+                self.current_token_value.push(c);
+                Ok(())
+            }
+            EntryLiteral::DoubleQuote => {
+                self.transition_keep_value(ReadValue(TokenizerReadValueMode::DoubleQuoted));
+                Ok(())
+            }
+            EntryLiteral::LeftBrace => {
+                self.transition_keep_value(ReadValue(TokenizerReadValueMode::Braced(0)));
+                Ok(())
+            }
+            EntryLiteral::Comma => {
+                self.add_token(EntryToken::Value(self.current_token_value.clone()));
+                self.transition(ReadPropertyName);
+                Ok(())
+            }
+            EntryLiteral::RightBrace => {
+                self.add_token(EntryToken::Value(self.current_token_value.clone()));
+                self.transition(End);
+                Ok(())
+            }
+            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => self.invalid_token(l),
+        }
+    }
+
+    fn read_value_quoted(&mut self) -> Result<(), Error> {
+        let literal = self.next_literal()?;
+        match literal {
+            EntryLiteral::DoubleQuote => {
+                self.transition_keep_value(ReadValue(TokenizerReadValueMode::Normal));
+                Ok(())
+            }
+            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            l => {
+                self.current_token_value.push(l.to_char());
+                Ok(())
+            }
         }
     }
 
@@ -167,123 +211,10 @@ impl Tokenizer {
         }
     }
 
-    fn read_value_double_quoted(&mut self) -> Result<(), Error> {
+    fn end(&mut self) -> Result<(), Error> {
         let literal = self.next_literal()?;
         match literal {
-            EntryLiteral::DoubleQuote => {
-                self.transition_keep_value(ReadValue(TokenizerReadValueMode::Normal));
-                Ok(())
-            }
-            EntryLiteral::EndOfFile => self.unexpected_eof(),
-            l => {
-                self.current_token_value.push(l.to_char());
-                Ok(())
-            }
-        }
-    }
-
-    fn read_value(&mut self) -> Result<(), Error> {
-        let literal = self.next_literal()?;
-        match literal {
-            EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) => {
-                self.current_token_value.push(c);
-                Ok(())
-            }
-            EntryLiteral::DoubleQuote => {
-                self.transition_keep_value(ReadValue(TokenizerReadValueMode::DoubleQuoted));
-                Ok(())
-            }
-            EntryLiteral::LeftBrace => {
-                self.transition_keep_value(ReadValue(TokenizerReadValueMode::Braced(0)));
-                Ok(())
-            }
-            EntryLiteral::Comma => {
-                self.add_token(EntryToken::Value(self.current_token_value.clone()));
-                self.transition(ReadPropertyName);
-                Ok(())
-            }
-            EntryLiteral::RightBrace => {
-                self.add_token(EntryToken::Value(self.current_token_value.clone()));
-                self.transition(End);
-                Ok(())
-            }
-            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
-            EntryLiteral::EndOfFile => self.unexpected_eof(),
-            l => self.invalid_token(l),
-        }
-    }
-
-    fn read_property_name(&mut self) -> Result<(), Error> {
-        let literal = self.next_literal()?;
-        match literal {
-            EntryLiteral::Alphabetic(c) => {
-                self.current_token_value.push(c);
-                Ok(())
-            }
-            EntryLiteral::Equals => {
-                self.add_token(EntryToken::Property(self.current_token_value.clone()));
-                self.transition(ReadValue(TokenizerReadValueMode::Normal));
-                Ok(())
-            }
-            EntryLiteral::RightBrace => {
-                self.transition(End);
-                Ok(())
-            }
-            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
-            EntryLiteral::EndOfFile => self.unexpected_eof(),
-            l => self.invalid_token(l),
-        }
-    }
-
-    fn read_symbol(&mut self) -> Result<(), Error> {
-        let literal = self.next_literal()?;
-        match literal {
-            EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) | EntryLiteral::Other(c) => {
-                self.current_token_value.push(c);
-                Ok(())
-            }
-            EntryLiteral::Comma => {
-                self.add_token(EntryToken::Symbol(self.current_token_value.clone()));
-                self.transition(ReadPropertyName);
-                Ok(())
-            }
-            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
-            EntryLiteral::EndOfFile => self.unexpected_eof(),
-            l => self.invalid_token(l),
-        }
-    }
-
-    fn read_type(&mut self) -> Result<(), Error> {
-        let literal = self.next_literal()?;
-        match literal {
-            EntryLiteral::Alphabetic(c) => {
-                let cl = c
-                    .to_lowercase()
-                    .next()
-                    .expect("Couldn't convert to lowercase.");
-                self.current_token_value.push(cl);
-                Ok(())
-            }
-            EntryLiteral::LeftBrace => {
-                self.add_token(EntryToken::Type(self.current_token_value.clone()));
-                self.transition(ReadSymbol);
-                Ok(())
-            }
-            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
-            EntryLiteral::EndOfFile => self.unexpected_eof(),
-            l => self.invalid_token(l),
-        }
-    }
-
-    fn idle(&mut self) -> Result<(), Error> {
-        let literal = self.next_literal()?;
-        match literal {
-            EntryLiteral::AtSign => {
-                self.transition(ReadType);
-                Ok(())
-            }
-            EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
-            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            EntryLiteral::Whitespace | EntryLiteral::Newline | EntryLiteral::EndOfFile => Ok(()),
             l => self.invalid_token(l),
         }
     }
@@ -392,10 +323,356 @@ struct Position {
     column: usize,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum EntryLiteral {
+    AtSign,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    DoubleQuote,
+    Hash,
+    Equals,
+    Whitespace,
+    Newline,
+    Alphabetic(char),
+    Numeric(char),
+    Other(char),
+    EndOfFile,
+}
+
+impl EntryLiteral {
+    fn from_char(c: char) -> EntryLiteral {
+        match c {
+            '@' => EntryLiteral::AtSign,
+            '{' => EntryLiteral::LeftBrace,
+            '}' => EntryLiteral::RightBrace,
+            ',' => EntryLiteral::Comma,
+            '"' => EntryLiteral::DoubleQuote,
+            '#' => EntryLiteral::Hash,
+            '=' => EntryLiteral::Equals,
+            ' ' | '\t' | '\r' => EntryLiteral::Whitespace,
+            '\n' => EntryLiteral::Newline,
+            c if c.is_alphabetic() => EntryLiteral::Alphabetic(c),
+            c if c.is_numeric() => EntryLiteral::Numeric(c),
+            c => EntryLiteral::Other(c),
+        }
+    }
+
+    fn to_char(self) -> char {
+        match &self {
+            EntryLiteral::AtSign => '@',
+            EntryLiteral::LeftBrace => '{',
+            EntryLiteral::RightBrace => '}',
+            EntryLiteral::Comma => ',',
+            EntryLiteral::DoubleQuote => '"',
+            EntryLiteral::Hash => '#',
+            EntryLiteral::Equals => '=',
+            EntryLiteral::Whitespace => ' ',
+            EntryLiteral::Newline => '\n',
+            EntryLiteral::Other(c) | EntryLiteral::Alphabetic(c) | EntryLiteral::Numeric(c) => *c,
+            EntryLiteral::EndOfFile => '%',
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum TokenizerState {
+    Idle,
+    ReadType,
+    ReadSymbol,
+    ReadPropertyName,
+    ReadValue(TokenizerReadValueMode),
+    End,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum TokenizerReadValueMode {
+    Normal,
+    DoubleQuoted,
+    Braced(i32),
+}
+
 #[cfg(test)]
 mod tokenizer_test {
     use super::*;
     use crate::s;
+
+    #[test]
+    fn tokenize_bibtex_entry() {
+        // given
+        let input = r#"
+            @book{beck-2004,
+              title     = {Extreme Programming Explained: Embrace Change},
+            }"#;
+
+        let mut tokenizer = tokenizer_for_str(input);
+
+        let expected = vec![
+            EntryToken::Type(s!("book")),
+            EntryToken::Symbol(s!("beck-2004")),
+            EntryToken::Property(s!("title")),
+            EntryToken::Value(s!("Extreme Programming Explained: Embrace Change")),
+        ];
+
+        // when
+        let actual: Vec<EntryToken> = tokenizer.tokenize();
+
+        // then
+        assert_eq!(actual, expected)
+    }
+
+    mod idle {
+        use super::*;
+
+        #[test]
+        fn invalid_token() {
+            // given
+            let input = "abc";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
+                "Unexpected token: 'a'. Position: byte: 1 (line 1, column 1)",
+            );
+
+            // when
+            let actual = tokenizer.idle().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn unexpected_eof() {
+            // given
+            let input = " \t\n";
+            fn consume_whitespace(tokenizer: &mut Tokenizer) {
+                for _ in 0..3 {
+                    let _ = tokenizer.idle();
+                }
+            }
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected EOF. Position: byte: 3 (line 2, column 0)",
+            );
+
+            // when
+            consume_whitespace(&mut tokenizer);
+            let actual = tokenizer.idle().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn valid_token() {
+            // given
+            let input = "@abc";
+            let mut tokenizer = tokenizer_for_str(input);
+
+            // when
+            tokenizer.idle().unwrap();
+
+            // then
+            assert_eq!(tokenizer.state, ReadType);
+        }
+    }
+
+    mod read_type {
+        use super::*;
+
+        #[test]
+        fn invalid_token() {
+            // given
+            let input = "!";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
+                "Unexpected token: '!'. Position: byte: 1 (line 1, column 1)",
+            );
+
+            // when
+            let actual = tokenizer.idle().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn unexpected_eof() {
+            // given
+            let input = "";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
+            );
+
+            // when
+            let actual = tokenizer.read_type().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn valid_token() {
+            // given
+            let input = "abc{";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = EntryToken::Type(s!("abc"));
+
+            // when
+            for _ in 0..4 {
+                tokenizer.read_type().unwrap();
+            }
+            let actual = tokenizer.tokens.first().unwrap();
+
+            assert_eq!(*actual, expected);
+            assert_eq!(tokenizer.state, ReadSymbol)
+        }
+
+        #[test]
+        fn to_lower_case() {
+            // given
+            let input = "AbC{";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = EntryToken::Type(s!("abc"));
+
+            // when
+            for _ in 0..4 {
+                tokenizer.read_type().unwrap();
+            }
+            let actual = tokenizer.tokens.first().unwrap();
+
+            assert_eq!(*actual, expected);
+            assert_eq!(tokenizer.state, ReadSymbol)
+        }
+    }
+
+    mod read_symbol {
+        use super::*;
+
+        #[test]
+        fn invalid_token() {
+            // given
+            let input = "@";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
+                "Unexpected token: '@'. Position: byte: 1 (line 1, column 1)",
+            );
+
+            // when
+            let actual = tokenizer.read_symbol().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn unexpected_eof() {
+            // given
+            let input = "";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
+            );
+
+            // when
+            let actual = tokenizer.read_symbol().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn valid_token() {
+            // given
+            let input = "a-1,";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = EntryToken::Symbol(s!("a-1"));
+
+            // when
+            for _ in 0..4 {
+                tokenizer.read_symbol().unwrap();
+            }
+            let actual = tokenizer.tokens.first().unwrap();
+
+            assert_eq!(*actual, expected);
+            assert_eq!(tokenizer.state, ReadPropertyName)
+        }
+    }
+
+    mod read_property_name {
+        use super::*;
+
+        #[test]
+        fn invalid_token() {
+            // given
+            let input = "@";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::InvalidInput,
+                "Unexpected token: '@'. Position: byte: 1 (line 1, column 1)",
+            );
+
+            // when
+            let actual = tokenizer.read_property_name().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn unexpected_eof() {
+            // given
+            let input = "";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
+            );
+
+            // when
+            let actual = tokenizer.read_property_name().unwrap_err();
+
+            // then
+            assert_io_error_eq(actual, expected);
+        }
+
+        #[test]
+        fn valid_transition_to_reading_value() {
+            // given
+            let input = "abc=";
+            let mut tokenizer = tokenizer_for_str(input);
+            let expected = EntryToken::Property(s!("abc"));
+
+            // when
+            for _ in 0..4 {
+                tokenizer.read_property_name().unwrap();
+            }
+            let actual = tokenizer.tokens.first().unwrap();
+
+            // then
+            assert_eq!(*actual, expected);
+            assert_eq!(tokenizer.state, ReadValue(TokenizerReadValueMode::Normal));
+        }
+
+        #[test]
+        fn valid_transition_to_end() {
+            // given
+            let input = "}";
+            let mut tokenizer = tokenizer_for_str(input);
+
+            // when
+            tokenizer.read_property_name().unwrap();
+
+            // then
+            assert_eq!(tokenizer.state, End);
+        }
+    }
 
     mod read_value {
         use super::*;
@@ -434,11 +711,11 @@ mod tokenizer_test {
             assert_io_error_eq(actual, expected);
         }
 
-        mod read_value_double_quoted {
+        mod read_value_quoted {
             use super::*;
 
             #[test]
-            fn valid_transition_to_double_quoted() {
+            fn valid_transition_to_quoted() {
                 // given
                 let input = "\"";
                 let mut tokenizer = tokenizer_for_str(input);
@@ -454,13 +731,13 @@ mod tokenizer_test {
             }
 
             #[test]
-            fn valid_transition_out_of_double_quoted() {
+            fn valid_transition_out_of_quoted() {
                 // given
                 let input = "\"";
                 let mut tokenizer = tokenizer_for_str(input);
 
                 // when
-                tokenizer.read_value_double_quoted().unwrap();
+                tokenizer.read_value_quoted().unwrap();
 
                 // then
                 assert_eq!(tokenizer.state, ReadValue(TokenizerReadValueMode::Normal))
@@ -475,7 +752,7 @@ mod tokenizer_test {
 
                 // when
                 for _ in 0..5 {
-                    tokenizer.read_value_double_quoted().unwrap();
+                    tokenizer.read_value_quoted().unwrap();
                 }
                 let actual = tokenizer.current_token_value.as_str();
 
@@ -580,405 +857,132 @@ mod tokenizer_test {
         }
     }
 
-    mod read_property_name {
+    mod internal {
         use super::*;
 
         #[test]
-        fn invalid_token() {
-            // given
-            let input = "@";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::InvalidInput,
-                "Unexpected token: '@'. Position: byte: 1 (line 1, column 1)",
-            );
-
-            // when
-            let actual = tokenizer.read_property_name().unwrap_err();
-
-            // then
-            assert_io_error_eq(actual, expected);
-        }
-
-        #[test]
-        fn unexpected_eof() {
-            // given
-            let input = "";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::UnexpectedEof,
-                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
-            );
-
-            // when
-            let actual = tokenizer.read_property_name().unwrap_err();
-
-            // then
-            assert_io_error_eq(actual, expected);
-        }
-
-        #[test]
-        fn valid_transition_to_reading_value() {
-            // given
-            let input = "abc=";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = EntryToken::Property(s!("abc"));
-
-            // when
-            for _ in 0..4 {
-                tokenizer.read_property_name().unwrap();
-            }
-            let actual = tokenizer.tokens.first().unwrap();
-
-            // then
-            assert_eq!(*actual, expected);
-            assert_eq!(tokenizer.state, ReadValue(TokenizerReadValueMode::Normal));
-        }
-
-        #[test]
-        fn valid_transition_to_end() {
-            // given
-            let input = "}";
-            let mut tokenizer = tokenizer_for_str(input);
-
-            // when
-            tokenizer.read_property_name().unwrap();
-
-            // then
-            assert_eq!(tokenizer.state, End);
-        }
-    }
-
-    mod read_symbol {
-        use super::*;
-
-        #[test]
-        fn invalid_token() {
-            // given
-            let input = "@";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::InvalidInput,
-                "Unexpected token: '@'. Position: byte: 1 (line 1, column 1)",
-            );
-
-            // when
-            let actual = tokenizer.read_symbol().unwrap_err();
-
-            // then
-            assert_io_error_eq(actual, expected);
-        }
-
-        #[test]
-        fn unexpected_eof() {
-            // given
-            let input = "";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::UnexpectedEof,
-                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
-            );
-
-            // when
-            let actual = tokenizer.read_symbol().unwrap_err();
-
-            // then
-            assert_io_error_eq(actual, expected);
-        }
-
-        #[test]
-        fn valid_token() {
-            // given
-            let input = "a-1,";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = EntryToken::Symbol(s!("a-1"));
-
-            // when
-            for _ in 0..4 {
-                tokenizer.read_symbol().unwrap();
-            }
-            let actual = tokenizer.tokens.first().unwrap();
-
-            assert_eq!(*actual, expected);
-            assert_eq!(tokenizer.state, ReadPropertyName)
-        }
-    }
-
-    mod read_type {
-        use super::*;
-
-        #[test]
-        fn invalid_token() {
-            // given
-            let input = "!";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::InvalidInput,
-                "Unexpected token: '!'. Position: byte: 1 (line 1, column 1)",
-            );
-
-            // when
-            let actual = tokenizer.idle().unwrap_err();
-
-            // then
-            assert_io_error_eq(actual, expected);
-        }
-
-        #[test]
-        fn unexpected_eof() {
-            // given
-            let input = "";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::UnexpectedEof,
-                "Unexpected EOF. Position: byte: 0 (line 1, column 0)",
-            );
-
-            // when
-            let actual = tokenizer.read_type().unwrap_err();
-
-            // then
-            assert_io_error_eq(actual, expected);
-        }
-
-        #[test]
-        fn valid_token() {
-            // given
-            let input = "abc{";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = EntryToken::Type(s!("abc"));
-
-            // when
-            for _ in 0..4 {
-                tokenizer.read_type().unwrap();
-            }
-            let actual = tokenizer.tokens.first().unwrap();
-
-            assert_eq!(*actual, expected);
-            assert_eq!(tokenizer.state, ReadSymbol)
-        }
-
-        #[test]
-        fn to_lower_case() {
-            // given
-            let input = "AbC{";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = EntryToken::Type(s!("abc"));
-
-            // when
-            for _ in 0..4 {
-                tokenizer.read_type().unwrap();
-            }
-            let actual = tokenizer.tokens.first().unwrap();
-
-            assert_eq!(*actual, expected);
-            assert_eq!(tokenizer.state, ReadSymbol)
-        }
-    }
-
-    mod idle {
-        use super::*;
-
-        #[test]
-        fn invalid_token() {
-            // given
-            let input = "abc";
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::InvalidInput,
-                "Unexpected token: 'a'. Position: byte: 1 (line 1, column 1)",
-            );
-
-            // when
-            let actual = tokenizer.idle().unwrap_err();
-
-            // then
-            assert_io_error_eq(actual, expected);
-        }
-
-        #[test]
-        fn unexpected_eof() {
-            // given
-            let input = " \t\n";
-            fn consume_whitespace(tokenizer: &mut Tokenizer) {
-                for _ in 0..3 {
-                    let _ = tokenizer.idle();
-                }
-            }
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::UnexpectedEof,
-                "Unexpected EOF. Position: byte: 3 (line 2, column 0)",
-            );
-
-            // when
-            consume_whitespace(&mut tokenizer);
-            let actual = tokenizer.idle().unwrap_err();
-
-            // then
-            assert_io_error_eq(actual, expected);
-        }
-
-        #[test]
-        fn valid_token() {
-            // given
-            let input = "@abc";
-            let mut tokenizer = tokenizer_for_str(input);
-
-            // when
-            tokenizer.idle().unwrap();
-
-            // then
-            assert_eq!(tokenizer.state, ReadType);
-        }
-    }
-
-    #[test]
-    fn literals() {
-        vec![
-            ("@", EntryLiteral::AtSign),
-            ("\n", EntryLiteral::Newline),
-            ("a", EntryLiteral::Alphabetic('a')),
-            ("!", EntryLiteral::Other('!')),
-            ("", EntryLiteral::EndOfFile),
-        ]
-        .iter()
-        .for_each(|(input, expected)| {
-            // given
-            let mut tokenizer = tokenizer_for_str(input);
-
-            // when
-            let actual = tokenizer.next_literal().unwrap();
-
-            // then
-            assert_eq!(actual, *expected);
-        });
-    }
-
-    #[test]
-    fn position() {
-        vec![
-            (
-                "aaa",
-                Position {
-                    byte: 3,
-                    line: 1,
-                    column: 3,
-                },
-            ),
-            (
-                "a👌b",
-                Position {
-                    byte: 6,
-                    line: 1,
-                    column: 3,
-                },
-            ),
-            (
-                "a\nb",
-                Position {
-                    byte: 3,
-                    line: 2,
-                    column: 1,
-                },
-            ),
-            (
-                "👌\nb",
-                Position {
-                    byte: 6,
-                    line: 2,
-                    column: 1,
-                },
-            ),
-        ]
-        .iter()
-        .for_each(|(input, expected)| {
-            // given
-            let mut tokenizer = tokenizer_for_str(input);
-
-            // when
-            for _ in 0..3 {
-                let _ = tokenizer.next_char();
-            }
-            let actual = tokenizer.position;
-
-            // then
-            assert_eq!(actual, *expected);
-        });
-    }
-
-    #[test]
-    fn utf8_next_char() {
-        vec![("abc", Some('a')), ("👌", Some('👌')), ("", None)]
+        fn literals() {
+            vec![
+                ("@", EntryLiteral::AtSign),
+                ("\n", EntryLiteral::Newline),
+                ("a", EntryLiteral::Alphabetic('a')),
+                ("!", EntryLiteral::Other('!')),
+                ("", EntryLiteral::EndOfFile),
+            ]
             .iter()
             .for_each(|(input, expected)| {
                 // given
                 let mut tokenizer = tokenizer_for_str(input);
 
                 // when
-                let actual = tokenizer.next_char().unwrap();
+                let actual = tokenizer.next_literal().unwrap();
 
                 // then
                 assert_eq!(actual, *expected);
             });
-    }
+        }
 
-    #[test]
-    #[allow(clippy::invalid_utf8_in_unchecked)]
-    fn non_valid_utf8_next_char() {
-        unsafe {
-            // given
-            let utf8_buffer = &[255, 254, 253, 252];
-            let input = std::str::from_utf8_unchecked(utf8_buffer);
-            let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::InvalidInput,
-                s!("Cannot decode bytes to UTF-8. Bytes: [ff fe fd fc]"),
-            );
+        #[test]
+        fn position() {
+            vec![
+                (
+                    "aaa",
+                    Position {
+                        byte: 3,
+                        line: 1,
+                        column: 3,
+                    },
+                ),
+                (
+                    "a👌b",
+                    Position {
+                        byte: 6,
+                        line: 1,
+                        column: 3,
+                    },
+                ),
+                (
+                    "a\nb",
+                    Position {
+                        byte: 3,
+                        line: 2,
+                        column: 1,
+                    },
+                ),
+                (
+                    "👌\nb",
+                    Position {
+                        byte: 6,
+                        line: 2,
+                        column: 1,
+                    },
+                ),
+            ]
+            .iter()
+            .for_each(|(input, expected)| {
+                // given
+                let mut tokenizer = tokenizer_for_str(input);
 
-            // when
-            let actual = tokenizer.next_char().unwrap_err();
+                // when
+                for _ in 0..3 {
+                    let _ = tokenizer.next_char();
+                }
+                let actual = tokenizer.position;
 
-            // then
-            assert_io_error_eq(actual, expected);
+                // then
+                assert_eq!(actual, *expected);
+            });
+        }
+
+        #[test]
+        fn utf8_next_char() {
+            vec![("abc", Some('a')), ("👌", Some('👌')), ("", None)]
+                .iter()
+                .for_each(|(input, expected)| {
+                    // given
+                    let mut tokenizer = tokenizer_for_str(input);
+
+                    // when
+                    let actual = tokenizer.next_char().unwrap();
+
+                    // then
+                    assert_eq!(actual, *expected);
+                });
+        }
+
+        #[test]
+        #[allow(clippy::invalid_utf8_in_unchecked)]
+        fn non_valid_utf8_next_char() {
+            unsafe {
+                // given
+                let utf8_buffer = &[255, 254, 253, 252];
+                let input = std::str::from_utf8_unchecked(utf8_buffer);
+                let mut tokenizer = tokenizer_for_str(input);
+                let expected = Error::new(
+                    ErrorKind::InvalidInput,
+                    s!("Cannot decode bytes to UTF-8. Bytes: [ff fe fd fc]"),
+                );
+
+                // when
+                let actual = tokenizer.next_char().unwrap_err();
+
+                // then
+                assert_io_error_eq(actual, expected);
+            }
         }
     }
 
-    fn assert_io_error_eq(actual: Error, expected: Error) {
-        assert_eq!(actual.kind(), expected.kind(),);
-        assert_eq!(actual.to_string(), expected.to_string(),);
+    fn tokenizer_for_str(input: &'static str) -> Tokenizer {
+        let reader = reader_from_str(input);
+        Tokenizer::new(reader)
     }
 
     fn reader_from_str(s: &str) -> Box<dyn Read + '_> {
         Box::new(s.as_bytes())
     }
 
-    #[test]
-    fn tokenize_bibtex_entry() {
-        // given
-        let input = r#"
-            @book{beck-2004,
-              title     = {Extreme Programming Explained: Embrace Change},
-            }"#;
-
-        let mut tokenizer = tokenizer_for_str(input);
-
-        let expected = vec![
-            EntryToken::Type(s!("book")),
-            EntryToken::Symbol(s!("beck-2004")),
-            EntryToken::Property(s!("title")),
-            EntryToken::Value(s!("Extreme Programming Explained: Embrace Change")),
-        ];
-
-        // when
-        let actual: Vec<EntryToken> = tokenizer.tokenize();
-
-        // then
-        assert_eq!(actual, expected)
-    }
-
-    fn tokenizer_for_str(input: &'static str) -> Tokenizer {
-        let reader = reader_from_str(input);
-        Tokenizer::new(reader)
+    fn assert_io_error_eq(actual: Error, expected: Error) {
+        assert_eq!(actual.kind(), expected.kind(),);
+        assert_eq!(actual.to_string(), expected.to_string(),);
     }
 }
