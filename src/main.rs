@@ -1,6 +1,7 @@
 use crate::tokenizer::Tokenizer;
 
-mod property;
+mod entry_field;
+mod entry_type;
 mod strings;
 mod tokenizer;
 
@@ -9,21 +10,6 @@ fn main() {
     let mut tokenizer = Tokenizer::new(reader);
     let tokens = tokenizer.tokenize();
     println!("{:#?}", tokens);
-}
-
-#[derive(Debug, PartialEq)]
-enum EntryType {
-    Book,
-    Other(String),
-}
-
-impl EntryType {
-    fn from_str(s: &str) -> EntryType {
-        match s {
-            "book" => EntryType::Book,
-            s => EntryType::Other(String::from(s)),
-        }
-    }
 }
 
 #[derive(PartialEq, Debug)]

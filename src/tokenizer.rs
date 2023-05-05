@@ -38,7 +38,7 @@ impl Tokenizer {
                 Idle => self.idle(),
                 ReadType => self.read_type(),
                 ReadSymbol => self.read_symbol(),
-                ReadPropertyName => self.read_property_name(),
+                ReadPropertyName => self.read_field_name(),
                 ReadValue(TokenizerReadValueMode::Normal) => self.read_value(),
                 ReadValue(TokenizerReadValueMode::DoubleQuoted) => self.read_value_quoted(),
                 ReadValue(TokenizerReadValueMode::Braced(_)) => self.read_value_braced(),
@@ -111,7 +111,7 @@ impl Tokenizer {
         }
     }
 
-    fn read_property_name(&mut self) -> Result<(), Error> {
+    fn read_field_name(&mut self) -> Result<(), Error> {
         let literal = self.next_literal()?;
         match literal {
             EntryLiteral::Alphabetic(c) => {
@@ -605,7 +605,7 @@ mod tokenizer_test {
         }
     }
 
-    mod read_property_name {
+    mod read_field_name {
         use super::*;
 
         #[test]
@@ -619,7 +619,7 @@ mod tokenizer_test {
             );
 
             // when
-            let actual = tokenizer.read_property_name().unwrap_err();
+            let actual = tokenizer.read_field_name().unwrap_err();
 
             // then
             assert_io_error_eq(actual, expected);
@@ -636,7 +636,7 @@ mod tokenizer_test {
             );
 
             // when
-            let actual = tokenizer.read_property_name().unwrap_err();
+            let actual = tokenizer.read_field_name().unwrap_err();
 
             // then
             assert_io_error_eq(actual, expected);
@@ -651,7 +651,7 @@ mod tokenizer_test {
 
             // when
             for _ in 0..4 {
-                tokenizer.read_property_name().unwrap();
+                tokenizer.read_field_name().unwrap();
             }
             let actual = tokenizer.tokens.first().unwrap();
 
@@ -667,7 +667,7 @@ mod tokenizer_test {
             let mut tokenizer = tokenizer_for_str(input);
 
             // when
-            tokenizer.read_property_name().unwrap();
+            tokenizer.read_field_name().unwrap();
 
             // then
             assert_eq!(tokenizer.state, End);
@@ -827,7 +827,7 @@ mod tokenizer_test {
         }
 
         #[test]
-        fn valid_transition_to_reading_property_name() {
+        fn valid_transition_to_reading_field_name() {
             // given
             let input = "abc,";
             let mut tokenizer = tokenizer_for_str(input);
