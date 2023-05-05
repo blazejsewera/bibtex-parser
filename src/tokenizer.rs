@@ -1,10 +1,8 @@
 use std::io::{Error, ErrorKind, Read};
 use TokenizerState::*;
 
-use crate::s;
-
 #[derive(Clone, Debug, PartialEq)]
-enum EntryToken {
+pub(crate) enum EntryToken {
     Type(String),
     Symbol(String),
     Property(String),
@@ -46,7 +44,7 @@ impl EntryLiteral {
         }
     }
 
-    fn to_char(&self) -> char {
+    fn to_char(self) -> char {
         match &self {
             EntryLiteral::AtSign => '@',
             EntryLiteral::LeftBrace => '{',
@@ -80,7 +78,7 @@ enum TokenizerReadValueMode {
     Braced(i32),
 }
 
-struct Tokenizer {
+pub(crate) struct Tokenizer {
     buffer: Box<dyn Read>,
     current_token_value: String,
     tokens: Vec<EntryToken>,
@@ -89,7 +87,7 @@ struct Tokenizer {
 }
 
 impl Tokenizer {
-    fn new(buffer: Box<dyn Read>) -> Tokenizer {
+    pub(crate) fn new(buffer: Box<dyn Read>) -> Tokenizer {
         Tokenizer {
             buffer,
             current_token_value: String::new(),
@@ -103,7 +101,7 @@ impl Tokenizer {
         }
     }
 
-    fn tokenize(&mut self) -> Vec<EntryToken> {
+    pub(crate) fn tokenize(&mut self) -> Vec<EntryToken> {
         loop {
             let result = match self.state {
                 Idle => self.idle(),
@@ -127,19 +125,6 @@ impl Tokenizer {
             };
         }
         self.tokens.clone()
-    }
-
-    fn tokenize_one_char(&mut self) -> Result<(), Error> {
-        match self.state {
-            Idle => self.idle(),
-            ReadType => self.read_type(),
-            ReadSymbol => self.read_symbol(),
-            ReadPropertyName => self.read_property_name(),
-            ReadValue(TokenizerReadValueMode::Normal) => self.read_value(),
-            ReadValue(TokenizerReadValueMode::DoubleQuoted) => self.read_value_double_quoted(),
-            ReadValue(TokenizerReadValueMode::Braced(_)) => self.read_value_braced(),
-            End => self.end(),
-        }
     }
 
     fn end(&mut self) -> Result<(), Error> {
@@ -407,14 +392,10 @@ struct Position {
     column: usize,
 }
 
-struct EntryContext {
-    value: String,
-    env: TokenizerState,
-}
-
 #[cfg(test)]
 mod tokenizer_test {
     use super::*;
+    use crate::s;
 
     mod read_value {
         use super::*;

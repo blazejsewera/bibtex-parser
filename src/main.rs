@@ -1,9 +1,13 @@
+use crate::tokenizer::Tokenizer;
+
 mod strings;
 mod tokenizer;
 
 fn main() {
-    println!("Hello, world!");
-    parse_bibtex(s!("hello"));
+    let reader = Box::new(EXAMPLE_ENTRY.as_bytes());
+    let mut tokenizer = Tokenizer::new(reader);
+    let tokens = tokenizer.tokenize();
+    println!("{:#?}", tokens);
 }
 
 #[derive(Debug, PartialEq)]
@@ -151,3 +155,15 @@ mod tokenizer_test {
         assert_eq!(expected, parsed)
     }
 }
+
+static EXAMPLE_ENTRY: &str = r#"
+    @book{beck-2004,
+      title     = {Extreme Programming Explained: Embrace Change},
+      edition   = {2},
+      isbn      = {978-0-13-405199-4},
+      series    = {{XP} Series},
+      pagetotal = {189},
+      publisher = {Addison-Wesley Professional},
+      author    = {Beck, Kent and Andres, Cynthia},
+      date      = {2004},
+    }"#;
