@@ -5,7 +5,7 @@ use TokenizerState::*;
 pub(crate) enum EntryToken {
     Type(String),
     Symbol(String),
-    Property(String),
+    FieldName(String),
     Value(String),
 }
 
@@ -42,16 +42,10 @@ impl Tokenizer {
                 ReadValue(TokenizerReadValueMode::Normal) => self.read_value(),
                 ReadValue(TokenizerReadValueMode::DoubleQuoted) => self.read_value_quoted(),
                 ReadValue(TokenizerReadValueMode::Braced(_)) => self.read_value_braced(),
-                End => {
-                    let end_result = self.end();
-                    match end_result {
-                        Ok(()) => break,
-                        e => e,
-                    }
-                }
             };
             match result {
                 Ok(()) => continue,
+                Err(e) if e.kind() == ErrorKind::WriteZero => break,
                 Err(e) => panic!("{}", e),
             };
         }
@@ -66,7 +60,7 @@ impl Tokenizer {
                 Ok(())
             }
             EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
-            EntryLiteral::EndOfFile => self.unexpected_eof(),
+            EntryLiteral::EndOfFile => Err(Error::new(ErrorKind::WriteZero, "File ended")),
             l => self.invalid_token(l),
         }
     }
@@ -119,12 +113,12 @@ impl Tokenizer {
                 Ok(())
             }
             EntryLiteral::Equals => {
-                self.add_token(EntryToken::Property(self.current_token_value.clone()));
+                self.add_token(EntryToken::FieldName(self.current_token_value.clone()));
                 self.transition(ReadValue(TokenizerReadValueMode::Normal));
                 Ok(())
             }
             EntryLiteral::RightBrace => {
-                self.transition(End);
+                self.transition(Idle);
                 Ok(())
             }
             EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
@@ -155,7 +149,7 @@ impl Tokenizer {
             }
             EntryLiteral::RightBrace => {
                 self.add_token(EntryToken::Value(self.current_token_value.clone()));
-                self.transition(End);
+                self.transition(Idle);
                 Ok(())
             }
             EntryLiteral::Whitespace | EntryLiteral::Newline => Ok(()),
@@ -208,14 +202,6 @@ impl Tokenizer {
         match brace_level {
             bl if bl > 0 => TokenizerReadValueMode::Braced(bl - 1),
             _ => TokenizerReadValueMode::Normal,
-        }
-    }
-
-    fn end(&mut self) -> Result<(), Error> {
-        let literal = self.next_literal()?;
-        match literal {
-            EntryLiteral::Whitespace | EntryLiteral::Newline | EntryLiteral::EndOfFile => Ok(()),
-            l => self.invalid_token(l),
         }
     }
 
@@ -382,7 +368,6 @@ enum TokenizerState {
     ReadSymbol,
     ReadPropertyName,
     ReadValue(TokenizerReadValueMode),
-    End,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -403,6 +388,11 @@ mod tokenizer_test {
         let input = r#"
             @book{beck-2004,
               title     = {Extreme Programming Explained: Embrace Change},
+            }
+            @online{malan-2008,
+              title      = "Conway's Law",
+              author     = "Malan, Ruth",
+              year       = 2008
             }"#;
 
         let mut tokenizer = tokenizer_for_str(input);
@@ -410,15 +400,23 @@ mod tokenizer_test {
         let expected = vec![
             EntryToken::Type(s!("book")),
             EntryToken::Symbol(s!("beck-2004")),
-            EntryToken::Property(s!("title")),
+            EntryToken::FieldName(s!("title")),
             EntryToken::Value(s!("Extreme Programming Explained: Embrace Change")),
+            EntryToken::Type(s!("online")),
+            EntryToken::Symbol(s!("malan-2008")),
+            EntryToken::FieldName(s!("title")),
+            EntryToken::Value(s!("Conway's Law")),
+            EntryToken::FieldName(s!("author")),
+            EntryToken::Value(s!("Malan, Ruth")),
+            EntryToken::FieldName(s!("year")),
+            EntryToken::Value(s!("2008")),
         ];
 
         // when
         let actual: Vec<EntryToken> = tokenizer.tokenize();
 
         // then
-        assert_eq!(actual, expected)
+        assert_eq!(actual, expected);
     }
 
     mod idle {
@@ -442,7 +440,7 @@ mod tokenizer_test {
         }
 
         #[test]
-        fn unexpected_eof() {
+        fn valid_eof() {
             // given
             let input = " \t\n";
             fn consume_whitespace(tokenizer: &mut Tokenizer) {
@@ -451,10 +449,7 @@ mod tokenizer_test {
                 }
             }
             let mut tokenizer = tokenizer_for_str(input);
-            let expected = Error::new(
-                ErrorKind::UnexpectedEof,
-                "Unexpected EOF. Position: byte: 3 (line 2, column 0)",
-            );
+            let expected = Error::new(ErrorKind::WriteZero, "File ended");
 
             // when
             consume_whitespace(&mut tokenizer);
@@ -492,7 +487,7 @@ mod tokenizer_test {
             );
 
             // when
-            let actual = tokenizer.idle().unwrap_err();
+            let actual = tokenizer.read_type().unwrap_err();
 
             // then
             assert_io_error_eq(actual, expected);
@@ -647,7 +642,7 @@ mod tokenizer_test {
             // given
             let input = "abc=";
             let mut tokenizer = tokenizer_for_str(input);
-            let expected = EntryToken::Property(s!("abc"));
+            let expected = EntryToken::FieldName(s!("abc"));
 
             // when
             for _ in 0..4 {
@@ -670,7 +665,7 @@ mod tokenizer_test {
             tokenizer.read_field_name().unwrap();
 
             // then
-            assert_eq!(tokenizer.state, End);
+            assert_eq!(tokenizer.state, Idle);
         }
     }
 
@@ -853,7 +848,7 @@ mod tokenizer_test {
             tokenizer.read_value().unwrap();
 
             // then
-            assert_eq!(tokenizer.state, End);
+            assert_eq!(tokenizer.state, Idle);
         }
     }
 

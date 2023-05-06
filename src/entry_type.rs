@@ -36,7 +36,7 @@ pub(crate) enum EntryType {
     PhdThesis,
     TechReport,
     DataType,
-    Invalid(String),
+    Other(String),
 }
 
 impl EntryType {
@@ -76,7 +76,16 @@ impl EntryType {
             "phdthesis" => EntryType::PhdThesis,
             "techreport" => EntryType::TechReport,
             "datatype" => EntryType::DataType,
-            _ => EntryType::Invalid(s!(s)),
+            _ => EntryType::Other(s!(s)),
+        }
+    }
+}
+
+impl std::fmt::Display for EntryType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EntryType::Other(s) => write!(f, "{}", s.to_lowercase()),
+            _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
     }
 }

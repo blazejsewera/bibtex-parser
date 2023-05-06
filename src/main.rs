@@ -17,7 +17,6 @@ struct Book {
     symbol: String,
     title: String,
     authors: Vec<Author>,
-    date: Option<Date>,
     edition: Option<i32>,
     isbn: Option<String>,
     series: Option<String>,
@@ -30,13 +29,6 @@ struct Author {
     first_name: String,
     middle_name: Option<String>,
     last_name: String,
-}
-
-#[derive(PartialEq, Debug)]
-enum Date {
-    Year(i32),
-    YearMonth(i32, time::Month),
-    YearMonthDay(i32, time::Month, i8),
 }
 
 fn parse_bibtex(_entry: String) -> Result<Book, String> {
@@ -55,7 +47,6 @@ fn parse_bibtex(_entry: String) -> Result<Book, String> {
                 last_name: s!("Andres"),
             },
         ],
-        date: Some(Date::Year(2004)),
         edition: Some(2),
         isbn: Some(s!("978-0-13-405199-4")),
         series: Some(s!("XP Series")),
@@ -103,7 +94,6 @@ mod tokenizer_test {
             series: Some(s!("XP Series")),
             page_count: Some(0),
             publisher: Some(s!("Addison-Wesley Professional")),
-            date: Some(Date::Year(2004)),
         });
 
         // when

@@ -79,7 +79,7 @@ pub(crate) enum EntryField {
     Version,
     Volume,
     Year,
-    Invalid(String),
+    Other(String),
 }
 
 impl EntryField {
@@ -165,7 +165,16 @@ impl EntryField {
             "version" => EntryField::Version,
             "volume" => EntryField::Volume,
             "year" => EntryField::Year,
-            _ => EntryField::Invalid(s!(s)),
+            _ => EntryField::Other(s!(s)),
+        }
+    }
+}
+
+impl std::fmt::Display for EntryField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EntryField::Other(s) => write!(f, "{}", s.to_lowercase()),
+            _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
     }
 }
