@@ -19,16 +19,16 @@ impl Person {
     const FIRST_LAST_SEPARATOR: &'static str = ", ";
 
     pub(crate) fn people_from_str(s: &str) -> Vec<Person> {
-        let mut people = Vec::<Person>::new();
         let people_str = s.splitn(100, Self::NAME_SEPARATOR);
-        people_str.for_each(|person_str| {
-            let person = Self::person_from_str(person_str);
-            match person {
-                Ok(p) => people.push(p),
-                Err(e) => panic!("{}", e),
-            }
-        });
-        people
+        people_str
+            .map(|person_str| {
+                let person = Self::person_from_str(person_str);
+                match person {
+                    Ok(p) => p,
+                    Err(e) => panic!("{}", e),
+                }
+            })
+            .collect()
     }
 
     fn person_from_str(s: &str) -> Result<Person, &str> {
@@ -73,6 +73,38 @@ impl Person {
 #[cfg(test)]
 mod person_test {
     use super::*;
+
+    #[test]
+    fn create_vec_of_four_people_from_str() {
+        // given
+        let input = "Gamma, Erich and Helm, Richard and Johnson, Ralph E. and Vlissides, John M.";
+        let expected = vec![
+            Person::FirstLast {
+                first_name: s!("Erich"),
+                last_name: s!("Gamma"),
+            },
+            Person::FirstLast {
+                first_name: s!("Richard"),
+                last_name: s!("Helm"),
+            },
+            Person::FirstMiddleLast {
+                first_name: s!("Ralph"),
+                middle_names: vec![s!("E")],
+                last_name: s!("Johnson"),
+            },
+            Person::FirstMiddleLast {
+                first_name: s!("John"),
+                middle_names: vec![s!("M")],
+                last_name: s!("Vlissides"),
+            },
+        ];
+
+        // when
+        let actual = Person::people_from_str(input);
+
+        // then
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn create_vec_of_one_person_from_str() {
