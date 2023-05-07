@@ -1,5 +1,4 @@
 use crate::s;
-use std::fs::read;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum Person {
@@ -15,19 +14,25 @@ pub(crate) enum Person {
     FullName(String),
 }
 
-const NAME_SEPARATOR: &str = " and ";
-const FIRST_LAST_SEPARATOR: &str = ", ";
-
 impl Person {
+    const NAME_SEPARATOR: &'static str = " and ";
+    const FIRST_LAST_SEPARATOR: &'static str = ", ";
+
     pub(crate) fn people_from_str(s: &str) -> Vec<Person> {
         let mut people = Vec::<Person>::new();
-        let people_str = s.splitn(100, NAME_SEPARATOR);
-        people_str.for_each(|person_str| {});
-        vec![]
+        let people_str = s.splitn(100, Self::NAME_SEPARATOR);
+        people_str.for_each(|person_str| {
+            let person = Self::person_from_str(person_str);
+            match person {
+                Ok(p) => people.push(p),
+                Err(e) => panic!("{}", e),
+            }
+        });
+        people
     }
 
     fn person_from_str(s: &str) -> Result<Person, &str> {
-        let names_str: Vec<&str> = s.splitn(2, FIRST_LAST_SEPARATOR).collect();
+        let names_str: Vec<&str> = s.splitn(2, Self::FIRST_LAST_SEPARATOR).collect();
         let (first, middle) = match names_str.get(1) {
             Some(s) => Self::first_or_first_and_middle(s),
             None => return Ok(Person::FullName(s!(s))),
@@ -69,7 +74,6 @@ impl Person {
 mod person_test {
     use super::*;
 
-    #[ignore]
     #[test]
     fn create_vec_of_one_person_from_str() {
         // given
