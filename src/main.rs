@@ -2,6 +2,7 @@ use crate::tokenizer::Tokenizer;
 
 mod entry_field;
 mod entry_type;
+mod person;
 mod strings;
 mod tokenizer;
 

@@ -1,3 +1,4 @@
+use crate::person::Person;
 use crate::s;
 
 #[derive(Debug, PartialEq)]
@@ -5,13 +6,13 @@ pub(crate) enum EntryField {
     Abstract,
     Afterword,
     Annotation,
-    Author,
+    Author(Vec<Person>),
     AuthorType,
-    BookAuthor,
+    BookAuthor(Vec<Person>),
     BookPagination,
     BookSubtitle,
     Chapter,
-    Commentator,
+    Commentator(Vec<Person>),
     Date,
     Doi,
     Edition,
@@ -25,7 +26,7 @@ pub(crate) enum EntryField {
     EventTitle,
     File,
     Foreword,
-    Holder,
+    Holder(Vec<Person>),
     HowPublished,
     IndexTitle,
     Institution,
@@ -72,7 +73,7 @@ pub(crate) enum EntryField {
     ShortTitle,
     Subtitle,
     Title,
-    Translator,
+    Translator(Vec<Person>),
     Type,
     Url,
     Venue,
@@ -83,20 +84,20 @@ pub(crate) enum EntryField {
 }
 
 impl EntryField {
-    pub(crate) fn from_str(s: &str) -> EntryField {
-        match s {
+    pub(crate) fn from_field_name_and_value(field_name: &str, value: &str) -> EntryField {
+        match field_name {
             "abstract" => EntryField::Abstract,
             "afterword" => EntryField::Afterword,
             "annotation" => EntryField::Annotation,
             "annotator" => EntryField::Annotation,
-            "author" => EntryField::Author,
+            "author" => EntryField::Author(vec![]),
             "authortype" => EntryField::AuthorType,
-            "bookauthor" => EntryField::BookAuthor,
+            "bookauthor" => EntryField::BookAuthor(vec![]),
             "bookpagination" => EntryField::BookPagination,
             "booksubtitle" => EntryField::BookSubtitle,
             "booktitle" => EntryField::BookSubtitle,
             "chapter" => EntryField::Chapter,
-            "commentator" => EntryField::Commentator,
+            "commentator" => EntryField::Commentator(vec![]),
             "date" => EntryField::Date,
             "doi" => EntryField::Doi,
             "edition" => EntryField::Edition,
@@ -111,7 +112,7 @@ impl EntryField {
             "eventtitle" => EntryField::EventTitle,
             "file" => EntryField::File,
             "foreword" => EntryField::Foreword,
-            "holder" => EntryField::Holder,
+            "holder" => EntryField::Holder(vec![]),
             "howpublished" => EntryField::HowPublished,
             "indextitle" => EntryField::IndexTitle,
             "institution" => EntryField::Institution,
@@ -158,14 +159,14 @@ impl EntryField {
             "shorttitle" => EntryField::ShortTitle,
             "subtitle" => EntryField::Subtitle,
             "title" => EntryField::Title,
-            "translator" => EntryField::Translator,
+            "translator" => EntryField::Translator(vec![]),
             "type" => EntryField::Type,
             "url" => EntryField::Url,
             "venue" => EntryField::Venue,
             "version" => EntryField::Version,
             "volume" => EntryField::Volume,
             "year" => EntryField::Year,
-            _ => EntryField::Other(s!(s)),
+            _ => EntryField::Other(s!(field_name)),
         }
     }
 }
