@@ -9,7 +9,7 @@ pub(crate) enum Person {
     },
     FirstMiddleLast {
         first_name: String,
-        middle_name: String,
+        middle_names: Vec<String>,
         last_name: String,
     },
     FullName(String),
@@ -28,8 +28,8 @@ impl Person {
 
     fn person_from_str(s: &str) -> Result<Person, &str> {
         let names_str: Vec<&str> = s.splitn(2, FIRST_LAST_SEPARATOR).collect();
-        let first_and_middle = match names_str.get(1) {
-            Some(s) => *s,
+        let (first, middle) = match names_str.get(1) {
+            Some(s) => Self::first_or_first_and_middle(s),
             None => return Ok(Person::FullName(s!(s))),
         };
 
@@ -38,28 +38,30 @@ impl Person {
             None => return Err("Could not parse person info"),
         };
 
-        Ok(Person::FirstLast {
-            first_name: s!(first_and_middle),
-            last_name: s!(last),
-        })
+        return if middle.is_empty() {
+            Ok(Person::FirstLast {
+                first_name: s!(first),
+                last_name: s!(last),
+            })
+        } else {
+            Ok(Person::FirstMiddleLast {
+                first_name: s!(first),
+                middle_names: middle.iter().map(|s| s!(*s)).collect(),
+                last_name: s!(last),
+            })
+        };
     }
 
-    fn first_or_first_and_middle(s: &str) -> (&str, Option<&str>) {
-        let names_str: Vec<&str> = s.split(|c| c == ' ' || c == '~').collect();
-        let middle = match names_str.get(1) {
-            Some(s) => *s,
-            None => {
-                let names = s.split('.').collect::<Vec<&str>>().split_first();
-                ""
-            }
-        };
-
-        let first = match names_str.first() {
-            Some(s) => *s,
-            None => "",
-        };
-
-        (first, Some(middle))
+    fn first_or_first_and_middle(s: &str) -> (&str, Vec<&str>) {
+        let names_str: Vec<&str> = s
+            .split(|c| c == ' ' || c == '~' || c == '.')
+            .filter(|s| !s.is_empty())
+            .collect();
+        let first_and_tail = names_str.split_first();
+        match first_and_tail {
+            Some((first, tail)) => (*first, tail.to_vec()),
+            None => (s, vec![]),
+        }
     }
 }
 
@@ -85,7 +87,7 @@ mod person_test {
     }
 
     #[test]
-    fn first_last_from_str() {
+    fn single_person_first_last_from_str() {
         let input = "Beck, Kent";
         let expected = Ok(Person::FirstLast {
             first_name: s!("Kent"),
@@ -100,11 +102,11 @@ mod person_test {
     }
 
     #[test]
-    fn first_middle_last_from_str() {
+    fn single_person_first_middle_last_from_str() {
         let input = "Martin, Robert C.";
         let expected = Ok(Person::FirstMiddleLast {
             first_name: s!("Robert"),
-            middle_name: s!("C."),
+            middle_names: vec![s!("C")],
             last_name: s!("Martin"),
         });
 
@@ -119,13 +121,13 @@ mod person_test {
     fn get_first_and_middle() {
         // given
         vec![
-            ("Kent", ("Kent", None)),
-            ("Robert Cecil", ("Robert", Some("Cecil"))),
-            ("Robert C.", ("Robert", Some("C."))),
-            ("R. C.", ("R.", Some("C."))),
-            ("R.~C.", ("R.", Some("C."))),
-            ("R.C.", ("R.", Some("C."))),
-            ("J.R.R.", ("J.", Some("R. R."))),
+            ("Kent", ("Kent", vec![])),
+            ("Robert Cecil", ("Robert", vec!["Cecil"])),
+            ("Robert C.", ("Robert", vec!["C"])),
+            ("R. C.", ("R", vec!["C"])),
+            ("R.~C.", ("R", vec!["C"])),
+            ("R.C.", ("R", vec!["C"])),
+            ("J.R.R.", ("J", vec!["R", "R"])),
         ]
         .iter()
         .for_each(|(input, expected)| {
