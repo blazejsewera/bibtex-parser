@@ -1,5 +1,6 @@
 use crate::tokenizer::Tokenizer;
 
+mod entry;
 mod entry_field;
 mod entry_type;
 mod person;
@@ -14,7 +15,7 @@ fn main() {
 }
 
 #[derive(PartialEq, Debug)]
-struct Book {
+struct Entry {
     symbol: String,
     title: String,
     authors: Vec<Author>,
@@ -32,8 +33,8 @@ struct Author {
     last_name: String,
 }
 
-fn parse_bibtex(_entry: String) -> Result<Book, String> {
-    Ok(Book {
+fn parse_bibtex(_entry: String) -> Result<Entry, String> {
+    Ok(Entry {
         symbol: s!("beck-2004"),
         title: s!("Extreme Programming Explained: Embrace Change"),
         authors: vec![
@@ -75,7 +76,7 @@ mod tokenizer_test {
           date      = {2004},
         }"#);
 
-        let expected = Ok(Book {
+        let expected = Ok(Entry {
             symbol: s!("beck-2004"),
             title: s!("Extreme Programming Explained: Embrace Change"),
             authors: vec![
