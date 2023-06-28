@@ -1,3 +1,4 @@
+use crate::pages::Pages;
 use crate::person::Person;
 use crate::s;
 
@@ -58,7 +59,7 @@ pub(crate) enum EntryField {
     OrigLocation(String),
     OrigPublisher(String),
     OrigTitle(String),
-    Pages(String),
+    Pages(Vec<Pages>),
     PageTotal,
     Pagination(String),
     Part(String),
@@ -144,7 +145,7 @@ impl EntryField {
             "origlocation" => EntryField::OrigLocation(s!(value)),
             "origpublisher" => EntryField::OrigPublisher(s!(value)),
             "origtitle" => EntryField::OrigTitle(s!(value)),
-            "pages" => EntryField::Pages(s!(value)),
+            "pages" => EntryField::Pages(Pages::pages_from_str(value)),
             "pagetotal" => EntryField::PageTotal,
             "pagination" => EntryField::Pagination(s!(value)),
             "part" => EntryField::Part(s!(value)),
