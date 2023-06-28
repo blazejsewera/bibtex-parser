@@ -1,6 +1,8 @@
+use crate::date::parse_month_from_str;
 use crate::pages::Pages;
 use crate::person::Person;
 use crate::s;
+use chrono::Month;
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum EntryField {
@@ -50,9 +52,9 @@ pub(crate) enum EntryField {
     Location(String),
     MainSubtitle(String),
     MainTitle(String),
-    Month,
+    Month(Month),
     Note(String),
-    Number,
+    Number(String),
     Organization(String),
     OrigDate,
     OrigLanguage(String),
@@ -60,7 +62,7 @@ pub(crate) enum EntryField {
     OrigPublisher(String),
     OrigTitle(String),
     Pages(Vec<Pages>),
-    PageTotal,
+    PageTotal(u32),
     Pagination(String),
     Part(String),
     Publisher(String),
@@ -136,9 +138,11 @@ impl EntryField {
             "location" => EntryField::Location(s!(value)),
             "mainsubtitle" => EntryField::MainSubtitle(s!(value)),
             "maintitle" => EntryField::MainTitle(s!(value)),
-            "month" => EntryField::Month,
+            "month" => {
+                EntryField::Month(parse_month_from_str(value).expect("Could not parse month"))
+            }
             "note" => EntryField::Note(s!(value)),
-            "number" => EntryField::Number,
+            "number" => EntryField::Number(s!(value)),
             "organization" => EntryField::Organization(s!(value)),
             "origdate" => EntryField::OrigDate,
             "origlanguage" => EntryField::OrigLanguage(s!(value)),
@@ -146,7 +150,7 @@ impl EntryField {
             "origpublisher" => EntryField::OrigPublisher(s!(value)),
             "origtitle" => EntryField::OrigTitle(s!(value)),
             "pages" => EntryField::Pages(Pages::pages_from_str(value)),
-            "pagetotal" => EntryField::PageTotal,
+            "pagetotal" => EntryField::PageTotal(value.to_string().parse().unwrap_or(0)),
             "pagination" => EntryField::Pagination(s!(value)),
             "part" => EntryField::Part(s!(value)),
             "publisher" => EntryField::Publisher(s!(value)),

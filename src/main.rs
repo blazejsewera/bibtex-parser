@@ -8,6 +8,7 @@ mod pages;
 mod person;
 mod strings;
 mod tokenizer;
+mod date;
 
 fn main() {
     let reader = Box::new(EXAMPLE_ENTRY.as_bytes());
