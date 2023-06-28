@@ -1,8 +1,10 @@
 use crate::tokenizer::Tokenizer;
 
+mod edition;
 mod entry;
 mod entry_field;
 mod entry_type;
+mod pages;
 mod person;
 mod strings;
 mod tokenizer;
