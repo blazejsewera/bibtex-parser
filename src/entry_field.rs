@@ -1,8 +1,8 @@
-use crate::date::parse_month_from_str;
+use crate::date::{parse_date_from_str, parse_month_from_str, parse_year_from_str};
 use crate::pages::Pages;
 use crate::person::Person;
 use crate::s;
-use chrono::Month;
+use chrono::{Month, NaiveDate};
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum EntryField {
@@ -17,7 +17,7 @@ pub(crate) enum EntryField {
     BookSubtitle(String),
     Chapter(String),
     Commentator(Vec<Person>),
-    Date,
+    Date(NaiveDate),
     Doi(String),
     Edition(String),
     Editor(Vec<Person>),
@@ -27,7 +27,7 @@ pub(crate) enum EntryField {
     EPrint(String),
     EPrintType(String),
     EPrintClass(String),
-    EventDate(String),
+    EventDate(NaiveDate),
     EventTitle(String),
     File(String),
     Foreword(String),
@@ -56,7 +56,7 @@ pub(crate) enum EntryField {
     Note(String),
     Number(String),
     Organization(String),
-    OrigDate,
+    OrigDate(NaiveDate),
     OrigLanguage(String),
     OrigLocation(String),
     OrigPublisher(String),
@@ -81,10 +81,11 @@ pub(crate) enum EntryField {
     Translator(Vec<Person>),
     Type(String),
     Url(String),
+    UrlDate(NaiveDate),
     Venue(String),
     Version(String),
     Volume(String),
-    Year,
+    Year(i32),
     Other(String),
 }
 
@@ -103,7 +104,7 @@ impl EntryField {
             "booktitle" => EntryField::BookSubtitle(s!(value)),
             "chapter" => EntryField::Chapter(s!(value)),
             "commentator" => EntryField::Commentator(Person::people_from_str(value)),
-            "date" => EntryField::Date,
+            "date" => EntryField::Date(parse_date_from_str(value).unwrap()),
             "doi" => EntryField::Doi(s!(value)),
             "edition" => EntryField::Edition(s!(value)),
             "editor" => EntryField::Editor(Person::people_from_str(value)),
@@ -113,7 +114,7 @@ impl EntryField {
             "eprint" => EntryField::EPrint(s!(value)),
             "eprinttype" => EntryField::EPrintType(s!(value)),
             "eprintclass" => EntryField::EPrintClass(s!(value)),
-            "eventdate" => EntryField::EventDate(s!(value)),
+            "eventdate" => EntryField::EventDate(parse_date_from_str(value).unwrap()),
             "eventtitle" => EntryField::EventTitle(s!(value)),
             "file" => EntryField::File(s!(value)),
             "foreword" => EntryField::Foreword(s!(value)),
@@ -138,19 +139,17 @@ impl EntryField {
             "location" => EntryField::Location(s!(value)),
             "mainsubtitle" => EntryField::MainSubtitle(s!(value)),
             "maintitle" => EntryField::MainTitle(s!(value)),
-            "month" => {
-                EntryField::Month(parse_month_from_str(value).expect("Could not parse month"))
-            }
+            "month" => EntryField::Month(parse_month_from_str(value).unwrap()),
             "note" => EntryField::Note(s!(value)),
             "number" => EntryField::Number(s!(value)),
             "organization" => EntryField::Organization(s!(value)),
-            "origdate" => EntryField::OrigDate,
+            "origdate" => EntryField::OrigDate(parse_date_from_str(value).unwrap()),
             "origlanguage" => EntryField::OrigLanguage(s!(value)),
             "origlocation" => EntryField::OrigLocation(s!(value)),
             "origpublisher" => EntryField::OrigPublisher(s!(value)),
             "origtitle" => EntryField::OrigTitle(s!(value)),
             "pages" => EntryField::Pages(Pages::pages_from_str(value)),
-            "pagetotal" => EntryField::PageTotal(value.to_string().parse().unwrap_or(0)),
+            "pagetotal" => EntryField::PageTotal(value.parse().unwrap_or(0)),
             "pagination" => EntryField::Pagination(s!(value)),
             "part" => EntryField::Part(s!(value)),
             "publisher" => EntryField::Publisher(s!(value)),
@@ -169,10 +168,11 @@ impl EntryField {
             "translator" => EntryField::Translator(Person::people_from_str(value)),
             "type" => EntryField::Type(s!(value)),
             "url" => EntryField::Url(s!(value)),
+            "urldate" => EntryField::UrlDate(parse_date_from_str(value).unwrap()),
             "venue" => EntryField::Venue(s!(value)),
             "version" => EntryField::Version(s!(value)),
             "volume" => EntryField::Volume(s!(value)),
-            "year" => EntryField::Year,
+            "year" => EntryField::Year(parse_year_from_str(value).unwrap()),
             _ => EntryField::Other(s!(field_name)),
         }
     }
