@@ -25,6 +25,7 @@ pub(crate) fn parse_year_from_str(s: &str) -> Result<i32, String> {
         .map_err(|_| format!("Could not parse Year from '{}'", s))
 }
 
+#[cfg(test)]
 mod date_test {
     use super::*;
     use crate::s;

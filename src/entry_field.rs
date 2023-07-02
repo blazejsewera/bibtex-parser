@@ -3,6 +3,7 @@ use crate::pages::Pages;
 use crate::person::Person;
 use crate::s;
 use chrono::{Month, NaiveDate};
+use crate::edition::Edition;
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum EntryField {
@@ -19,7 +20,7 @@ pub(crate) enum EntryField {
     Commentator(Vec<Person>),
     Date(NaiveDate),
     Doi(String),
-    Edition(String),
+    Edition(Edition),
     Editor(Vec<Person>),
     EditorType(String),
     Eid(String),
@@ -109,7 +110,7 @@ impl EntryField {
             "commentator" => EntryField::Commentator(Person::people_from_str(value)?),
             "date" => EntryField::Date(parse_date_from_str(value)?),
             "doi" => EntryField::Doi(s!(value)),
-            "edition" => EntryField::Edition(s!(value)),
+            "edition" => EntryField::Edition(Edition::parse(value)),
             "editor" => EntryField::Editor(Person::people_from_str(value)?),
             "editortype" => EntryField::EditorType(s!(value)),
             "eid" => EntryField::Eid(s!(value)),
