@@ -90,35 +90,38 @@ pub(crate) enum EntryField {
 }
 
 impl EntryField {
-    pub(crate) fn from_field_name_and_value(field_name: &str, value: &str) -> EntryField {
-        match field_name {
+    pub(crate) fn from_field_name_and_value(
+        field_name: &str,
+        value: &str,
+    ) -> Result<EntryField, String> {
+        let entry_field = match field_name {
             "abstract" => EntryField::Abstract(s!(value)),
             "afterword" => EntryField::Afterword(s!(value)),
             "annotation" => EntryField::Annotation(s!(value)),
-            "annotator" => EntryField::Annotator(Person::people_from_str(value)),
-            "author" => EntryField::Author(Person::people_from_str(value)),
+            "annotator" => EntryField::Annotator(Person::people_from_str(value)?),
+            "author" => EntryField::Author(Person::people_from_str(value)?),
             "authortype" => EntryField::AuthorType(s!(value)),
-            "bookauthor" => EntryField::BookAuthor(Person::people_from_str(value)),
+            "bookauthor" => EntryField::BookAuthor(Person::people_from_str(value)?),
             "bookpagination" => EntryField::BookPagination(s!(value)),
             "booksubtitle" => EntryField::BookSubtitle(s!(value)),
             "booktitle" => EntryField::BookSubtitle(s!(value)),
             "chapter" => EntryField::Chapter(s!(value)),
-            "commentator" => EntryField::Commentator(Person::people_from_str(value)),
-            "date" => EntryField::Date(parse_date_from_str(value).unwrap()),
+            "commentator" => EntryField::Commentator(Person::people_from_str(value)?),
+            "date" => EntryField::Date(parse_date_from_str(value)?),
             "doi" => EntryField::Doi(s!(value)),
             "edition" => EntryField::Edition(s!(value)),
-            "editor" => EntryField::Editor(Person::people_from_str(value)),
+            "editor" => EntryField::Editor(Person::people_from_str(value)?),
             "editortype" => EntryField::EditorType(s!(value)),
             "eid" => EntryField::Eid(s!(value)),
             "entrysubtype" => EntryField::EntrySubtype,
             "eprint" => EntryField::EPrint(s!(value)),
             "eprinttype" => EntryField::EPrintType(s!(value)),
             "eprintclass" => EntryField::EPrintClass(s!(value)),
-            "eventdate" => EntryField::EventDate(parse_date_from_str(value).unwrap()),
+            "eventdate" => EntryField::EventDate(parse_date_from_str(value)?),
             "eventtitle" => EntryField::EventTitle(s!(value)),
             "file" => EntryField::File(s!(value)),
             "foreword" => EntryField::Foreword(s!(value)),
-            "holder" => EntryField::Holder(Person::people_from_str(value)),
+            "holder" => EntryField::Holder(Person::people_from_str(value)?),
             "howpublished" => EntryField::HowPublished(s!(value)),
             "indextitle" => EntryField::IndexTitle(s!(value)),
             "institution" => EntryField::Institution(s!(value)),
@@ -139,17 +142,21 @@ impl EntryField {
             "location" => EntryField::Location(s!(value)),
             "mainsubtitle" => EntryField::MainSubtitle(s!(value)),
             "maintitle" => EntryField::MainTitle(s!(value)),
-            "month" => EntryField::Month(parse_month_from_str(value).unwrap()),
+            "month" => EntryField::Month(parse_month_from_str(value)?),
             "note" => EntryField::Note(s!(value)),
             "number" => EntryField::Number(s!(value)),
             "organization" => EntryField::Organization(s!(value)),
-            "origdate" => EntryField::OrigDate(parse_date_from_str(value).unwrap()),
+            "origdate" => EntryField::OrigDate(parse_date_from_str(value)?),
             "origlanguage" => EntryField::OrigLanguage(s!(value)),
             "origlocation" => EntryField::OrigLocation(s!(value)),
             "origpublisher" => EntryField::OrigPublisher(s!(value)),
             "origtitle" => EntryField::OrigTitle(s!(value)),
             "pages" => EntryField::Pages(Pages::pages_from_str(value)),
-            "pagetotal" => EntryField::PageTotal(value.parse().unwrap_or(0)),
+            "pagetotal" => EntryField::PageTotal(
+                value
+                    .parse()
+                    .map_err(|_| format!("Could not parse PageTotal value from '{}'", value))?,
+            ),
             "pagination" => EntryField::Pagination(s!(value)),
             "part" => EntryField::Part(s!(value)),
             "publisher" => EntryField::Publisher(s!(value)),
@@ -165,16 +172,18 @@ impl EntryField {
             "shorttitle" => EntryField::ShortTitle(s!(value)),
             "subtitle" => EntryField::Subtitle(s!(value)),
             "title" => EntryField::Title(s!(value)),
-            "translator" => EntryField::Translator(Person::people_from_str(value)),
+            "translator" => EntryField::Translator(Person::people_from_str(value)?),
             "type" => EntryField::Type(s!(value)),
             "url" => EntryField::Url(s!(value)),
-            "urldate" => EntryField::UrlDate(parse_date_from_str(value).unwrap()),
+            "urldate" => EntryField::UrlDate(parse_date_from_str(value)?),
             "venue" => EntryField::Venue(s!(value)),
             "version" => EntryField::Version(s!(value)),
             "volume" => EntryField::Volume(s!(value)),
-            "year" => EntryField::Year(parse_year_from_str(value).unwrap()),
+            "year" => EntryField::Year(parse_year_from_str(value)?),
             _ => EntryField::Other(s!(field_name)),
-        }
+        };
+
+        Ok(entry_field)
     }
 }
 

@@ -18,20 +18,14 @@ impl Person {
     const NAME_SEPARATOR: &'static str = " and ";
     const FIRST_LAST_SEPARATOR: &'static str = ", ";
 
-    pub(crate) fn people_from_str(s: &str) -> Vec<Person> {
+    pub(crate) fn people_from_str(s: &str) -> Result<Vec<Person>, String> {
         let people_str = s.splitn(100, Self::NAME_SEPARATOR);
         people_str
-            .map(|person_str| {
-                let person = Self::person_from_str(person_str);
-                match person {
-                    Ok(p) => p,
-                    Err(e) => panic!("{}", e),
-                }
-            })
+            .map(|person_str| Self::person_from_str(person_str))
             .collect()
     }
 
-    fn person_from_str(s: &str) -> Result<Person, &str> {
+    fn person_from_str(s: &str) -> Result<Person, String> {
         let names_str: Vec<&str> = s.splitn(2, Self::FIRST_LAST_SEPARATOR).collect();
         let (first, middle) = match names_str.get(1) {
             Some(s) => Self::first_or_first_and_middle(s),
@@ -40,7 +34,7 @@ impl Person {
 
         let last = match names_str.first() {
             Some(s) => *s,
-            None => return Err("Could not parse person info"),
+            None => return Err(s!("Could not parse person info")),
         };
 
         return if middle.is_empty() {
@@ -78,7 +72,7 @@ mod person_test {
     fn create_vec_of_four_people_from_str() {
         // given
         let input = "Gamma, Erich and Helm, Richard and Johnson, Ralph E. and Vlissides, John M.";
-        let expected = vec![
+        let expected = Ok(vec![
             Person::FirstLast {
                 first_name: s!("Erich"),
                 last_name: s!("Gamma"),
@@ -97,7 +91,7 @@ mod person_test {
                 middle_names: vec![s!("M")],
                 last_name: s!("Vlissides"),
             },
-        ];
+        ]);
 
         // when
         let actual = Person::people_from_str(input);
@@ -110,10 +104,10 @@ mod person_test {
     fn create_vec_of_one_person_from_str() {
         // given
         let input = "Beck, Kent";
-        let expected = vec![Person::FirstLast {
+        let expected = Ok(vec![Person::FirstLast {
             first_name: s!("Kent"),
             last_name: s!("Beck"),
-        }];
+        }]);
 
         // when
         let actual = Person::people_from_str(input);
