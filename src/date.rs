@@ -71,6 +71,7 @@ impl Date {
         }
     }
 
+    #[allow(dead_code)]
     fn merge(date1: Date, date2: Date) -> Date {
         match date1 {
             Date::Year(y1) => match date2 {

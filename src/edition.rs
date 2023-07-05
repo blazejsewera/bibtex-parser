@@ -1,4 +1,4 @@
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) enum Edition {
     Numeric(u32),
     Literal(String),
@@ -18,6 +18,7 @@ impl Edition {
     }
 }
 
+#[cfg(test)]
 mod edition_test {
     use super::*;
     use crate::s;

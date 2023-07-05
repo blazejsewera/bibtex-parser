@@ -1,6 +1,6 @@
 use crate::s;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) enum Person {
     FirstLast {
         first_name: String,

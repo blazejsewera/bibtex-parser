@@ -1,5 +1,7 @@
+use crate::entry::Parser;
 use crate::tokenizer::Tokenizer;
 
+mod date;
 mod edition;
 mod entry;
 mod entry_field;
@@ -8,108 +10,22 @@ mod pages;
 mod person;
 mod strings;
 mod tokenizer;
-mod date;
 
 fn main() {
-    let reader = Box::new(EXAMPLE_ENTRY.as_bytes());
-    let mut tokenizer = Tokenizer::new(reader);
-    let tokens = tokenizer.tokenize();
-    println!("{:#?}", tokens);
+    let mut parser = parser_for_str(EXAMPLE_ENTRIES);
+    let entries = parser.parse();
+
+    assert!(entries.is_ok());
+    println!("{:#?}", entries.unwrap());
 }
 
-#[derive(PartialEq, Debug)]
-struct Entry {
-    symbol: String,
-    title: String,
-    authors: Vec<Author>,
-    edition: Option<i32>,
-    isbn: Option<String>,
-    series: Option<String>,
-    page_count: Option<i64>,
-    publisher: Option<String>,
+fn parser_for_str(input: &'static str) -> Parser {
+    let reader = Box::new(input.as_bytes());
+    let tokenizer = Tokenizer::new(reader);
+    Parser::new(tokenizer)
 }
 
-#[derive(PartialEq, Debug)]
-struct Author {
-    first_name: String,
-    middle_name: Option<String>,
-    last_name: String,
-}
-
-fn parse_bibtex(_entry: String) -> Result<Entry, String> {
-    Ok(Entry {
-        symbol: s!("beck-2004"),
-        title: s!("Extreme Programming Explained: Embrace Change"),
-        authors: vec![
-            Author {
-                first_name: s!("Kent"),
-                middle_name: None,
-                last_name: s!("Beck"),
-            },
-            Author {
-                first_name: s!("Cynthia"),
-                middle_name: None,
-                last_name: s!("Andres"),
-            },
-        ],
-        edition: Some(2),
-        isbn: Some(s!("978-0-13-405199-4")),
-        series: Some(s!("XP Series")),
-        page_count: Some(0),
-        publisher: Some(s!("Addison-Wesley Professional")),
-    })
-}
-
-#[cfg(test)]
-mod tokenizer_test {
-    use super::*;
-
-    #[test]
-    fn parse_bibtex_entry() {
-        // given
-        let entry = s!(r#"
-        @book{beck-2004,
-          title     = {Extreme Programming Explained: Embrace Change},
-          edition   = {2},
-          isbn      = {978-0-13-405199-4},
-          series    = {{XP} Series},
-          pagetotal = {189},
-          publisher = {Addison-Wesley Professional},
-          author    = {Beck, Kent and Andres, Cynthia},
-          date      = {2004},
-        }"#);
-
-        let expected = Ok(Entry {
-            symbol: s!("beck-2004"),
-            title: s!("Extreme Programming Explained: Embrace Change"),
-            authors: vec![
-                Author {
-                    first_name: s!("Kent"),
-                    middle_name: None,
-                    last_name: s!("Beck"),
-                },
-                Author {
-                    first_name: s!("Cynthia"),
-                    middle_name: None,
-                    last_name: s!("Andres"),
-                },
-            ],
-            edition: Some(2),
-            isbn: Some(s!("978-0-13-405199-4")),
-            series: Some(s!("XP Series")),
-            page_count: Some(0),
-            publisher: Some(s!("Addison-Wesley Professional")),
-        });
-
-        // when
-        let parsed = parse_bibtex(entry);
-
-        // then
-        assert_eq!(expected, parsed)
-    }
-}
-
-static EXAMPLE_ENTRY: &str = r#"
+static EXAMPLE_ENTRIES: &str = r#"
     @book{beck-2004,
       title     = {Extreme Programming Explained: Embrace Change},
       edition   = {2},
@@ -119,4 +35,10 @@ static EXAMPLE_ENTRY: &str = r#"
       publisher = {Addison-Wesley Professional},
       author    = {Beck, Kent and Andres, Cynthia},
       date      = {2004},
+    }
+    @article{ieee-802-3-2018,
+      journal={IEEE Std 802.3-2018 (Revision of IEEE Std 802.3-2015)},
+      title={IEEE Standard for Ethernet},
+      year={2018},
+      doi={10.1109/IEEESTD.2018.8457469}
     }"#;

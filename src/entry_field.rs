@@ -3,9 +3,8 @@ use crate::edition::Edition;
 use crate::pages::Pages;
 use crate::person::Person;
 use crate::s;
-use crate::tokenizer::EntryToken;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub(crate) enum EntryField {
     Abstract(String),
     Afterword(String),
@@ -45,6 +44,7 @@ pub(crate) enum EntryField {
     IssueSubtitle(String),
     IssueTitle(String),
     Iswc(String),
+    Journal(String),
     JournalSubtitle(String),
     JournalTitle(String),
     Label(String),
@@ -135,6 +135,7 @@ impl EntryField {
             "issuesubtitle" => EntryField::IssueSubtitle(s!(value)),
             "issuetitle" => EntryField::IssueTitle(s!(value)),
             "iswc" => EntryField::Iswc(s!(value)),
+            "journal" => EntryField::Journal(s!(value)),
             "journalsubtitle" => EntryField::JournalSubtitle(s!(value)),
             "journaltitle" => EntryField::JournalTitle(s!(value)),
             "label" => EntryField::Label(s!(value)),

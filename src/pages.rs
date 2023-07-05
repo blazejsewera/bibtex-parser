@@ -1,13 +1,12 @@
 use crate::s;
-use std::num::ParseIntError;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) enum Pages {
     Single(Page),
     Range(Page, Page),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) enum Page {
     Numeric(u32),
     Literal(String),
@@ -57,10 +56,10 @@ impl Pages {
     }
 }
 
+#[cfg(test)]
 mod pages_test {
-    use crate::s;
-
     use super::*;
+    use crate::s;
 
     #[test]
     fn parse_single_from_str() {

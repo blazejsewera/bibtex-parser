@@ -2,8 +2,6 @@ use crate::entry_field::EntryField;
 use crate::entry_type::EntryType;
 use crate::s;
 use crate::tokenizer::{EntryToken, Tokenizer};
-use std::io::Read;
-use std::slice::Iter;
 
 #[derive(PartialEq, Debug)]
 pub(crate) struct Entry {
@@ -32,28 +30,26 @@ impl Parser {
     }
     pub(crate) fn parse(&mut self) -> Result<Vec<Entry>, String> {
         let tokens = self.tokenizer.tokenize()?;
-        let mut tokens_iter = tokens.iter();
+        let tokens_iter = tokens.iter();
         let mut entries: Vec<Entry> = vec![];
 
-        while let Some(entry) = Self::parse_entry(&mut tokens_iter)? {
-            entries.push(entry);
-        }
-
-        Ok(entries)
-    }
-
-    fn parse_entry(tokens: &mut Iter<EntryToken>) -> Result<Option<Entry>, String> {
         let mut entry_type: Option<EntryType> = None;
         let mut symbol: Option<String> = None;
         let mut fields: Vec<EntryField> = vec![];
 
         let mut field_name: Option<String> = None;
 
-        for token in tokens.by_ref() {
+        for token in tokens_iter {
             match token {
                 EntryToken::Type(t) => match entry_type {
                     None => entry_type = Some(EntryType::from_str(t.as_str())),
-                    _ => break,
+                    Some(previous_type) => {
+                        let s = symbol.clone().ok_or(s!("Symbol was missing from Entry"))?;
+                        entries.push(Entry::new(previous_type, s, fields.clone()));
+                        entry_type = Some(EntryType::from_str(t.as_str()));
+                        symbol = None;
+                        fields = vec![];
+                    }
                 },
                 EntryToken::Symbol(s) => match symbol {
                     None => symbol = Some(s.clone()),
@@ -91,13 +87,13 @@ impl Parser {
             }
         }
 
-        let t = match entry_type {
-            Some(t) => t,
-            None => return Ok(None),
+        if let Some(t) = entry_type {
+            if let Some(s) = symbol {
+                entries.push(Entry::new(t, s, fields.clone()))
+            };
         };
-        let s = symbol.ok_or(s!("Symbol was missing from Entry"))?;
 
-        Ok(Some(Entry::new(t, s, fields)))
+        Ok(entries)
     }
 }
 
@@ -108,6 +104,7 @@ mod entry_test {
     use crate::edition::Edition;
     use crate::person::Person;
     use crate::s;
+    use std::io::Read;
 
     #[test]
     fn parse_entries() {
@@ -122,30 +119,50 @@ mod entry_test {
                 publisher = {Addison-Wesley Professional},
                 author    = {Beck, Kent and Andres, Cynthia},
                 date      = {2004},
+            }
+            @article{ieee-802-3-2018,
+                journal={IEEE Std 802.3-2018 (Revision of IEEE Std 802.3-2015)},
+                title={IEEE Standard for Ethernet},
+                year={2018},
+                doi={10.1109/IEEESTD.2018.8457469}
             }"#;
-        let expected = Ok(vec![Entry {
-            r#type: EntryType::Book,
-            symbol: s!("beck-2004"),
-            fields: vec![
-                EntryField::Title(s!("Extreme Programming Explained: Embrace Change")),
-                EntryField::Edition(Edition::Numeric(2)),
-                EntryField::Isbn(s!("978-0-13-405199-4")),
-                EntryField::Series(s!("XP Series")),
-                EntryField::PageTotal(189),
-                EntryField::Publisher(s!("Addison-Wesley Professional")),
-                EntryField::Author(vec![
-                    Person::FirstLast {
-                        first_name: s!("Kent"),
-                        last_name: s!("Beck"),
-                    },
-                    Person::FirstLast {
-                        first_name: s!("Cynthia"),
-                        last_name: s!("Andres"),
-                    },
-                ]),
-                EntryField::Date(Date::Year(2004)),
-            ],
-        }]);
+        let expected = Ok(vec![
+            Entry {
+                r#type: EntryType::Book,
+                symbol: s!("beck-2004"),
+                fields: vec![
+                    EntryField::Title(s!("Extreme Programming Explained: Embrace Change")),
+                    EntryField::Edition(Edition::Numeric(2)),
+                    EntryField::Isbn(s!("978-0-13-405199-4")),
+                    EntryField::Series(s!("XP Series")),
+                    EntryField::PageTotal(189),
+                    EntryField::Publisher(s!("Addison-Wesley Professional")),
+                    EntryField::Author(vec![
+                        Person::FirstLast {
+                            first_name: s!("Kent"),
+                            last_name: s!("Beck"),
+                        },
+                        Person::FirstLast {
+                            first_name: s!("Cynthia"),
+                            last_name: s!("Andres"),
+                        },
+                    ]),
+                    EntryField::Date(Date::Year(2004)),
+                ],
+            },
+            Entry {
+                r#type: EntryType::Article,
+                symbol: s!("ieee-802-3-2018"),
+                fields: vec![
+                    EntryField::Journal(s!(
+                        "IEEE Std 802.3-2018 (Revision of IEEE Std 802.3-2015)"
+                    )),
+                    EntryField::Title(s!("IEEE Standard for Ethernet")),
+                    EntryField::Year(Date::Year(2018)),
+                    EntryField::Doi(s!("10.1109/IEEESTD.2018.8457469")),
+                ],
+            },
+        ]);
 
         // when
         let mut parser = parser_for_str(input);
