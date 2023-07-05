@@ -1,3 +1,4 @@
+use crate::s;
 use std::io::{Error, ErrorKind, Read};
 use TokenizerState::*;
 
@@ -32,7 +33,7 @@ impl Tokenizer {
         }
     }
 
-    pub(crate) fn tokenize(&mut self) -> Vec<EntryToken> {
+    pub(crate) fn tokenize(&mut self) -> Result<Vec<EntryToken>, String> {
         loop {
             let result = match self.state {
                 Idle => self.idle(),
@@ -46,10 +47,10 @@ impl Tokenizer {
             match result {
                 Ok(()) => continue,
                 Err(e) if e.kind() == ErrorKind::WriteZero => break,
-                Err(e) => panic!("{}", e),
+                Err(e) => return Err(format!("Tokenization error: {}", e)),
             };
         }
-        self.tokens.clone()
+        Ok(self.tokens.clone())
     }
 
     fn idle(&mut self) -> Result<(), Error> {
@@ -413,7 +414,7 @@ mod tokenizer_test {
         ];
 
         // when
-        let actual: Vec<EntryToken> = tokenizer.tokenize();
+        let actual: Vec<EntryToken> = tokenizer.tokenize().unwrap();
 
         // then
         assert_eq!(actual, expected);
@@ -852,6 +853,7 @@ mod tokenizer_test {
         }
     }
 
+    #[cfg(test)]
     mod internal {
         use super::*;
 

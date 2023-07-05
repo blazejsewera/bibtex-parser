@@ -3,6 +3,7 @@ use crate::edition::Edition;
 use crate::pages::Pages;
 use crate::person::Person;
 use crate::s;
+use crate::tokenizer::EntryToken;
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum EntryField {
