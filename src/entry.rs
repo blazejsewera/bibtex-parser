@@ -17,6 +17,7 @@ impl Entry {
 #[cfg(test)]
 mod entry_test {
     use super::*;
+    use crate::date::Date;
     use crate::edition::Edition;
     use crate::person::Person;
     use crate::s;
@@ -33,7 +34,7 @@ mod entry_test {
                 pagetotal = {189},
                 publisher = {Addison-Wesley Professional},
                 author    = {Beck, Kent and Andres, Cynthia},
-                year      = {2004},
+                date      = {2004},
             }"#;
         let expected = Ok(vec![Entry {
             r#type: EntryType::Book,
@@ -55,7 +56,7 @@ mod entry_test {
                         last_name: s!("Andres"),
                     },
                 ]),
-                EntryField::Year(2004),
+                EntryField::Date(Date::Year(2004)),
             ],
         }]);
 
