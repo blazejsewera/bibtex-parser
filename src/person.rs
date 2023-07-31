@@ -1,6 +1,7 @@
 use crate::s;
+use serde::Serialize;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize)]
 pub(crate) enum Person {
     FirstLast {
         first_name: String,
@@ -20,9 +21,7 @@ impl Person {
 
     pub(crate) fn people_from_str(s: &str) -> Result<Vec<Person>, String> {
         let people_str = s.splitn(100, Self::NAME_SEPARATOR);
-        people_str
-            .map(|person_str| Self::person_from_str(person_str))
-            .collect()
+        people_str.map(Self::person_from_str).collect()
     }
 
     fn person_from_str(s: &str) -> Result<Person, String> {

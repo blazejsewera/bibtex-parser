@@ -3,8 +3,9 @@ use crate::edition::Edition;
 use crate::pages::Pages;
 use crate::person::Person;
 use crate::s;
+use serde::Serialize;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub(crate) enum EntryField {
     Abstract(String),
     Afterword(String),
@@ -48,6 +49,7 @@ pub(crate) enum EntryField {
     JournalSubtitle(String),
     JournalTitle(String),
     Label(String),
+    LangId(String),
     Language(String),
     Library(String),
     Location(String),
@@ -87,7 +89,13 @@ pub(crate) enum EntryField {
     Version(String),
     Volume(String),
     Year(Date),
-    Other(String),
+    Other(UnknownField),
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize)]
+pub(crate) struct UnknownField {
+    name: String,
+    value: String,
 }
 
 impl EntryField {
@@ -139,6 +147,7 @@ impl EntryField {
             "journalsubtitle" => EntryField::JournalSubtitle(s!(value)),
             "journaltitle" => EntryField::JournalTitle(s!(value)),
             "label" => EntryField::Label(s!(value)),
+            "langid" => EntryField::LangId(s!(value)),
             "language" => EntryField::Language(s!(value)),
             "library" => EntryField::Library(s!(value)),
             "location" => EntryField::Location(s!(value)),
@@ -182,7 +191,10 @@ impl EntryField {
             "version" => EntryField::Version(s!(value)),
             "volume" => EntryField::Volume(s!(value)),
             "year" => EntryField::Year(Date::parse_year_from_str(value)?),
-            _ => EntryField::Other(s!(field_name)),
+            _ => EntryField::Other(UnknownField {
+                name: s!(field_name),
+                value: s!(value),
+            }),
         };
 
         Ok(entry_field)
@@ -192,7 +204,7 @@ impl EntryField {
 impl std::fmt::Display for EntryField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EntryField::Other(s) => write!(f, "{}", s.to_lowercase()),
+            EntryField::Other(field) => write!(f, "{}", field.name.to_lowercase()),
             _ => write!(f, "{}", format!("{:?}", self).to_lowercase()),
         }
     }

@@ -2,8 +2,9 @@ use crate::entry_field::EntryField;
 use crate::entry_type::EntryType;
 use crate::s;
 use crate::tokenizer::{EntryToken, Tokenizer};
+use serde::Serialize;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Serialize)]
 pub(crate) struct Entry {
     r#type: EntryType,
     symbol: String,

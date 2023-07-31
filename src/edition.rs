@@ -1,4 +1,6 @@
-#[derive(PartialEq, Debug, Clone)]
+use serde::Serialize;
+
+#[derive(PartialEq, Debug, Clone, Serialize)]
 pub(crate) enum Edition {
     Numeric(u32),
     Literal(String),

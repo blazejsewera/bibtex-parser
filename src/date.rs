@@ -1,7 +1,8 @@
 use chrono::Month;
 use num_traits::FromPrimitive;
+use serde::Serialize;
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone, Serialize)]
 pub(crate) enum Date {
     YearMonthDay(i32, u8, u8),
     YearMonth(i32, u8),

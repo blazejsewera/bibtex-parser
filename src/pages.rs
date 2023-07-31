@@ -1,12 +1,13 @@
 use crate::s;
+use serde::Serialize;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize)]
 pub(crate) enum Pages {
     Single(Page),
     Range(Page, Page),
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize)]
 pub(crate) enum Page {
     Numeric(u32),
     Literal(String),

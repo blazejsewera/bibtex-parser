@@ -1,6 +1,7 @@
 use crate::s;
+use serde::Serialize;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub(crate) enum EntryType {
     Article,
     Book,
